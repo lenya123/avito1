@@ -1,0 +1,21 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Каждые 5 дней в 12:00 UTC
+    - cron: '0 12 */5 * *'
+  workflow_dispatch: # Ручной запуск
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.SUPABASE_URL }}/auth/v1/health")
+          echo "Response code: $response"
+          if [ "$response" = "200" ]; then
+            echo "Supabase pinged successfully"
+          else
+            echo "Ping failed, but project is awake"
+          fi

@@ -1,0 +1,266 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* iOS 26 Liquid Glass Dark Mode */
+  --bg-primary: #0a0a0c;
+  --bg-secondary: #1a1a1e;
+  --bg-tertiary: #2a2a2e;
+  --bg-glass: rgba(255, 255, 255, 0.06);
+  --bg-glass-hover: rgba(255, 255, 255, 0.1);
+  --bg-glass-elevated: rgba(255, 255, 255, 0.12);
+  --bg-glass-active: rgba(255, 255, 255, 0.16);
+
+  /* Accent colors - более насыщенные */
+  --accent-blue: #0a84ff;
+  --accent-green: #30d158;
+  --accent-red: #ff453a;
+  --accent-orange: #ff9f0a;
+  --accent-purple: #bf5af2;
+  --accent-pink: #ff375f;
+  --accent-teal: #64d2ff;
+  --accent-indigo: #5e5ce6;
+
+  /* Glow colors для ambient эффектов */
+  --glow-purple: rgba(191, 90, 242, 0.4);
+  --glow-blue: rgba(10, 132, 255, 0.4);
+  --glow-teal: rgba(100, 210, 255, 0.3);
+  --glow-pink: rgba(255, 55, 95, 0.3);
+
+  /* Text colors — 5 уровней: 100/80/60/40/20 */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.8);
+  --text-tertiary: rgba(255, 255, 255, 0.6);
+  --text-quaternary: rgba(255, 255, 255, 0.4);
+  --text-muted: rgba(255, 255, 255, 0.2);
+
+  /* Border colors - единая система */
+  --border-color: rgba(255, 255, 255, 0.08); /* Минимальная граница */
+  --border-color-minimal: rgba(255, 255, 255, 0.1); /* Разделители, footer */
+  --border-color-subtle: rgba(255, 255, 255, 0.15); /* Лёгкая граница */
+  --border-color-default: rgba(255, 255, 255, 0.2); /* Стандартная (карточки) */
+  --border-color-active: rgba(255, 255, 255, 0.25); /* Активная/hover */
+  --border-color-strong: rgba(255, 255, 255, 0.4); /* Акцентная (бейджики) */
+  --border-color-glow: rgba(255, 255, 255, 0.5); /* Максимальная (галерея) */
+
+  /* Level-specific цвета */
+  --level-1-color: #aed6ff;
+  --level-2-color: #5daeff;
+
+  /* Semantic */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+
+  /* Shadows - более выразительные */
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-glass-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-glow-purple: 0 0 40px rgba(191, 90, 242, 0.15);
+  --shadow-glow-blue: 0 0 40px rgba(10, 132, 255, 0.15);
+}
+
+@layer base {
+  html {
+    @apply antialiased;
+    color-scheme: dark;
+    background-color: var(--bg-primary);
+    font-size: 16px;
+    /* Убираем 300ms задержку на мобильных */
+    touch-action: manipulation;
+    /* Отключаем автоматическое восстановление scroll position браузером */
+    scroll-behavior: auto;
+  }
+
+  /* Убираем подсветку при тапе на iOS */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Быстрый отклик для интерактивных элементов */
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  label {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Оптимизация для кликабельных элементов */
+  button,
+  [role="button"],
+  .cursor-pointer {
+    cursor: pointer;
+  }
+
+  /*
+   * Адаптивный масштаб для разных размеров экрана.
+   * Используем фиксированные media queries вместо calc(100vw),
+   * чтобы избежать проблем с Safari iOS.
+   */
+
+  /* iPhone SE, iPhone 8 (375pt) */
+  @media (max-width: 375px) {
+    html {
+      font-size: 14px;
+    }
+  }
+
+  /* iPhone 14/15 (393pt) */
+  @media (min-width: 376px) and (max-width: 413px) {
+    html {
+      font-size: 14.6px;
+    }
+  }
+
+  /* iPhone Plus, iPhone 14/15 Pro Max (414-430pt) */
+  @media (min-width: 414px) and (max-width: 429px) {
+    html {
+      font-size: 15.4px;
+    }
+  }
+
+  /* iPhone 14 Pro Max и больше (430pt+) — базовый размер */
+  @media (min-width: 430px) {
+    html {
+      font-size: 16px;
+    }
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100%;
+    min-height: 100dvh;
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  * {
+    border-color: var(--border-color);
+  }
+}
+
+@layer components {
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Spinner animations */
+  @keyframes breathing {
+    0%,
+    100% {
+      opacity: 0.4;
+      transform: scale(0.85);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes breathing-glow {
+    0%,
+    100% {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(1.2);
+    }
+  }
+
+  .animate-breathing {
+    animation: breathing 1.4s ease-in-out infinite;
+  }
+
+  .animate-breathing-glow {
+    animation: breathing-glow 1.4s ease-in-out infinite;
+  }
+
+  /* Плавное переливание градиента на бейджах служб доставки */
+  @keyframes gradient-shift {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .animate-gradient-shift {
+    background-size: 400% 100%;
+    animation: gradient-shift 5s ease-in-out infinite;
+  }
+
+  /* Touch action для быстрого отклика на мобильных */
+  .touch-action-manipulation {
+    touch-action: manipulation;
+  }
+
+  /* Hide scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Safe area utilities for iOS */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .safe-area-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .safe-area-y {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-all {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+  }
+
+  /* prefers-reduced-motion: отключаем CSS-анимации */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-breathing,
+    .animate-breathing-glow {
+      animation: none;
+      opacity: 0.7;
+    }
+    .animate-pulse,
+    .animate-ping,
+    .animate-spin {
+      animation: none;
+    }
+  }
+}
