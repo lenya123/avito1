@@ -8,12 +8,16 @@
 import type { Job } from "bullmq";
 import { createClient } from "@supabase/supabase-js";
 import { buildSalesContext, generateSalesDraft } from "@/lib/ai/sales-agent";
+import { normalizeIncoming } from "@/lib/ai/relay";
 
 export interface GenerateSalesDraftJobData {
   userId: string;
   chatId: string; // internal UUID (avito_chats.id)
   messageId: string; // internal UUID (avito_messages.id)
   buyerMessage: string;
+  /** Медиа входящего (фото/гс) — нормализуется через AI-реле в текст */
+  mediaImageUrl?: string;
+  mediaVoiceUrl?: string;
   avitoItemId?: number;
 }
 
@@ -25,8 +29,27 @@ function getSupabase() {
 }
 
 export async function handleGenerateSalesDraft(job: Job<GenerateSalesDraftJobData>): Promise<void> {
-  const { userId, chatId, messageId, buyerMessage } = job.data;
+  const { userId, chatId, messageId, mediaImageUrl, mediaVoiceUrl } = job.data;
+  let buyerMessage = job.data.buyerMessage;
   const supabase = getSupabase();
+
+  // AI-реле: входящее фото/гс → текст до нейронки (труба текст/фото/гс).
+  if ((!buyerMessage || !buyerMessage.trim()) && (mediaImageUrl || mediaVoiceUrl)) {
+    buyerMessage = await normalizeIncoming({
+      text: buyerMessage,
+      imageUrl: mediaImageUrl,
+      voiceUrl: mediaVoiceUrl,
+    });
+    // Пишем нормализованный текст в кеш — чтобы история чата его учитывала
+    await supabase
+      .from("avito_messages")
+      .update({ content_text: buyerMessage })
+      .eq("id", messageId);
+  }
+  if (!buyerMessage || !buyerMessage.trim()) {
+    console.log("[generate-sales-draft] empty message after relay, skipping");
+    return;
+  }
 
   console.log(`[generate-sales-draft] Generating for user=${userId} chat=${chatId.slice(0, 8)}...`);
 

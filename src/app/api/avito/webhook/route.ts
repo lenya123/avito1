@@ -57,6 +57,9 @@ export async function POST(request: NextRequest) {
     const direction = isIncoming ? "in" : "out";
     const messageText = content?.text || null;
     const imageUrl = content?.image?.url || null;
+    // STUB: verify Avito voice content shape on live account
+    const voiceUrl =
+      content?.voice?.url || content?.audio?.url || content?.voice?.voice_url || null;
     const createdAt = new Date(created * 1000).toISOString();
 
     // Upsert чат (ON CONFLICT UPDATE) — теперь с session_id
@@ -105,8 +108,9 @@ export async function POST(request: NextRequest) {
       .select("id")
       .single();
 
-    // AI Sales Agent: генерация черновика для входящих текстовых сообщений
-    if (isIncoming && messageText && msg) {
+    // AI Sales Agent: генерация черновика для входящих сообщений
+    // (текст / фото / голос — медиа нормализуется в воркере через AI-реле)
+    if (isIncoming && msg && (messageText || imageUrl || voiceUrl)) {
       try {
         const { data: salesSettings } = await supabase
           .from("ai_sales_settings")
@@ -132,7 +136,9 @@ export async function POST(request: NextRequest) {
                 userId,
                 chatId: chat.id,
                 messageId: msg.id,
-                buyerMessage: messageText,
+                buyerMessage: messageText || "",
+                mediaImageUrl: imageUrl || undefined,
+                mediaVoiceUrl: voiceUrl || undefined,
                 avitoItemId: itemId || undefined,
               },
               { jobId: `draft-${msg.id}` }
