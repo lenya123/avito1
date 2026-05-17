@@ -10,7 +10,13 @@
 import { writeFile, mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
-import { openAvitoSessionBrowser, humanType, clickFirst, randomDelay } from "./browser";
+import {
+  openAvitoSessionBrowser,
+  humanType,
+  clickFirst,
+  randomDelay,
+  dumpPageDebug,
+} from "./browser";
 
 const NAV_TIMEOUT = 60_000;
 
@@ -87,6 +93,7 @@ export async function postListing(
       input.title
     );
     if (!titleOk) {
+      await dumpPageDebug(page, "post-listing-title");
       return fail("Поле названия не найдено (форма Avito изменилась)");
     }
     await randomDelay(1500, 3000);
@@ -168,6 +175,7 @@ export async function postListing(
       'button[type="submit"]',
     ]);
     if (!submitted) {
+      await dumpPageDebug(page, "post-listing-submit");
       return fail("Кнопка публикации не найдена");
     }
 
@@ -197,6 +205,7 @@ export async function postListing(
       message: "Объявление отправлено (id подтянет синхронизация)",
     };
   } catch (e) {
+    await dumpPageDebug(page, "post-listing-error").catch(() => {});
     return fail(e instanceof Error ? e.message : "Ошибка браузера при публикации");
   } finally {
     await close();

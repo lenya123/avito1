@@ -9,7 +9,7 @@
  * // STUB: verify selectors against live Avito — пометки ниже отмечают места,
  * требующие проверки/уточнения на реальном кабинете.
  */
-import { openAvitoSessionBrowser, clickFirst, randomDelay } from "./browser";
+import { openAvitoSessionBrowser, clickFirst, randomDelay, dumpPageDebug } from "./browser";
 
 const NAV_TIMEOUT = 45_000;
 
@@ -69,7 +69,10 @@ export async function setAvitoItemActive(
           "восстановить",
           "вернуть в продажу",
         ]));
-      if (!clicked) return { ok: false, message: "Кнопка активации не найдена" };
+      if (!clicked) {
+        await dumpPageDebug(page, "item-activate");
+        return { ok: false, message: "Кнопка активации не найдена" };
+      }
     } else {
       // Снять с публикации
       // STUB: verify selectors against live Avito
@@ -84,7 +87,10 @@ export async function setAvitoItemActive(
           "снять объявление",
           "деактивировать",
         ]));
-      if (!clicked) return { ok: false, message: "Кнопка снятия не найдена" };
+      if (!clicked) {
+        await dumpPageDebug(page, "item-deactivate");
+        return { ok: false, message: "Кнопка снятия не найдена" };
+      }
     }
 
     await randomDelay(1200, 2500);
@@ -97,6 +103,7 @@ export async function setAvitoItemActive(
       message: active ? "Объявление активировано" : "Объявление снято с публикации",
     };
   } catch (e) {
+    await dumpPageDebug(page, "item-toggle-error").catch(() => {});
     return { ok: false, message: e instanceof Error ? e.message : "Ошибка браузера" };
   } finally {
     await close();
@@ -120,7 +127,10 @@ export async function deleteAvitoItem(
         '[data-marker="item-actions/delete"]',
         'button[data-marker="delete"]',
       ])) || (await clickByText(page, ["удалить объявление", "удалить"]));
-    if (!clicked) return { ok: false, message: "Кнопка удаления не найдена" };
+    if (!clicked) {
+      await dumpPageDebug(page, "item-delete");
+      return { ok: false, message: "Кнопка удаления не найдена" };
+    }
 
     await randomDelay(1000, 2200);
     // Часто Avito спрашивает причину + подтверждение
@@ -133,6 +143,7 @@ export async function deleteAvitoItem(
 
     return { ok: true, message: "Объявление удалено" };
   } catch (e) {
+    await dumpPageDebug(page, "item-delete-error").catch(() => {});
     return { ok: false, message: e instanceof Error ? e.message : "Ошибка браузера" };
   } finally {
     await close();

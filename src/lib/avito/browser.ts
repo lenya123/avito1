@@ -7,6 +7,9 @@
  * залогинены через cookies. Используется item-actions (Фаза 3) и
  * posting (Фаза 4).
  */
+import { mkdir, writeFile } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 import { createServiceClient } from "@/lib/supabase/server";
 import {
   generateFingerprint,
@@ -96,6 +99,42 @@ export async function clickFirst(page: AnyPage, selectors: string[]): Promise<bo
     }
   }
   return false;
+}
+
+/**
+ * Сохранить скриншот + HTML страницы при сбое — для выверки селекторов
+ * на боевом Avito (цикл правок в один заход).
+ * Каталог: $AVITO_DEBUG_DIR или <tmp>/avito-debug. Никогда не бросает.
+ */
+export async function dumpPageDebug(
+  page: AnyPage,
+  label: string
+): Promise<{ screenshot?: string; html?: string; url?: string }> {
+  try {
+    const dir = process.env.AVITO_DEBUG_DIR || join(tmpdir(), "avito-debug");
+    await mkdir(dir, { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const base = join(dir, `${label}-${ts}`);
+    const screenshot = `${base}.png`;
+    const html = `${base}.html`;
+    const url: string = (() => {
+      try {
+        return page.url?.() ?? "";
+      } catch {
+        return "";
+      }
+    })();
+    await page.screenshot({ path: screenshot, fullPage: true }).catch(() => {});
+    const content = await page.content().catch(() => "");
+    await writeFile(html, content).catch(() => {});
+    console.error(
+      `[avito-debug] ${label}: screenshot=${screenshot} html=${html} url=${url}`
+    );
+    return { screenshot, html, url };
+  } catch (e) {
+    console.error(`[avito-debug] ${label}: failed to capture`, e);
+    return {};
+  }
 }
 
 export interface AvitoBrowserHandle {
