@@ -11,7 +11,19 @@ export function DashboardOverview() {
     return <ErrorState title="Ошибка" message="Не удалось загрузить обзор" onRetry={refetch} />;
   }
 
-  const stats = overview ? { ...overview.stats, activeCount: overview.activeCount } : ({} as never);
+  const s = overview?.stats;
+  const stats = {
+    adBalance: s?.adBalance ?? null,
+    avgPromoPerDay: s?.avgPromoPerDay ?? 0,
+    activeItems: s?.activeItems ?? 0,
+    viewsMonth: s?.viewsMonth ?? 0,
+    favoritesMonth: s?.favoritesMonth ?? 0,
+    contactsMonth: s?.contactsMonth ?? 0,
+    ordersMonth: s?.ordersMonth ?? 0,
+    viewsToday: s?.viewsToday ?? 0,
+    contactsToday: s?.contactsToday ?? 0,
+    rating: s?.rating ?? null,
+  };
 
   return <AvitoOverviewCards stats={stats} isLoading={isLoading || !overview} />;
 }

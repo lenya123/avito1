@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { cn } from "@/utils/cn";
-import { useAvitoAiAgentStatus } from "@/hooks/use-avito";
+import { useAvitoAiAgentStatus, useAvitoOverview } from "@/hooks/use-avito";
 import { Skeleton } from "@/components/ui";
 
 const modeLabels: Record<string, string> = {
@@ -14,6 +14,7 @@ const modeLabels: Record<string, string> = {
 
 export function AiAgentCard() {
   const { data, isLoading } = useAvitoAiAgentStatus();
+  const { data: overview } = useAvitoOverview();
 
   // Loading skeleton
   if (isLoading) {
@@ -43,6 +44,7 @@ export function AiAgentCard() {
   const mode = data?.mode ?? null;
   const todayStats = data?.todayStats ?? { incoming: 0, drafts: 0, approved: 0 };
   const pendingDrafts = data?.pendingDrafts ?? 0;
+  const ai = overview?.aiAgent ?? { incoming: 0, responses: 0, conversion: 0 };
 
   return (
     <div
@@ -92,25 +94,33 @@ export function AiAgentCard() {
         )}
       </div>
 
-      {/* Today stats */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      {/* За месяц: входящие / ответы / конверсия (% заказов от переписок) */}
+      <div className="grid grid-cols-3 gap-2 mb-2">
         <div className="text-center p-2 rounded-xl bg-white/[0.04]">
-          <p className="text-lg font-semibold text-white">{todayStats.incoming}</p>
-          <p className="text-xs text-white/40">Входящие</p>
+          <p className="text-lg font-semibold text-white">{ai.incoming.toLocaleString("ru")}</p>
+          <p className="text-xs text-white/40">Входящие (мес)</p>
         </div>
         <div className="text-center p-2 rounded-xl bg-white/[0.04]">
-          <p className="text-lg font-semibold text-accent-orange">{todayStats.drafts}</p>
-          <p className="text-xs text-white/40">Черновики</p>
+          <p className="text-lg font-semibold text-accent-blue">
+            {ai.responses.toLocaleString("ru")}
+          </p>
+          <p className="text-xs text-white/40">Ответы (мес)</p>
         </div>
         <div className="text-center p-2 rounded-xl bg-white/[0.04]">
-          <p className="text-lg font-semibold text-accent-green">{todayStats.approved}</p>
-          <p className="text-xs text-white/40">Одобрено</p>
+          <p className="text-lg font-semibold text-accent-green">{ai.conversion}%</p>
+          <p className="text-xs text-white/40">Конверсия</p>
         </div>
       </div>
 
+      {/* Сегодня (мелким) */}
+      <p className="text-xs text-white/40 mb-3">
+        Сегодня: входящие {todayStats.incoming} · черновики {todayStats.drafts} · одобрено{" "}
+        {todayStats.approved}
+      </p>
+
       {/* Settings link */}
       <Link
-        href="/owner/ai-sales"
+        href="/avito/settings"
         className="text-xs text-accent-blue font-medium hover:text-accent-blue/80 transition-colors"
       >
         Настроить →

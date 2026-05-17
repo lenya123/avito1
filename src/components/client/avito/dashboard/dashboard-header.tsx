@@ -1,6 +1,6 @@
 "use client";
 
-import { BackButton, Button } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { useAvitoOverview } from "@/hooks/use-avito";
 import { AvitoAccountSwitcher } from "@/components/client/avito/avito-account-switcher";
 
@@ -18,11 +18,12 @@ export function DashboardHeader({ onSync, isSyncing }: DashboardHeaderProps) {
     <>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <BackButton href="/profile" />
           <div>
-            <h1 className="text-xl font-bold text-white">Avito</h1>
-            {overview?.profile && (
-              <p className="text-sm text-white/40 mt-0.5">{overview.profile.name}</p>
+            <h1 className="text-xl font-bold text-white">Дашборд</h1>
+            {(overview?.shopName || overview?.profile?.name) && (
+              <p className="text-sm text-white/40 mt-0.5">
+                {overview?.shopName || overview?.profile?.name}
+              </p>
             )}
           </div>
         </div>

@@ -19,7 +19,7 @@ import { AiAgentCard } from "@/components/client/avito/ai-agent-card";
 import {
   DashboardHeader,
   DashboardOverview,
-  DashboardFunnel,
+  DashboardOrdersStats,
   DashboardInsights,
   DashboardTopItems,
   DashboardItems,
@@ -143,7 +143,7 @@ export default function AvitoDashboardPage() {
             <AiAgentCard />
           </motion.div>
           <motion.div variants={staggerItem}>
-            <DashboardFunnel />
+            <DashboardOrdersStats />
           </motion.div>
           <motion.div variants={staggerItem}>
             <DashboardInsights />

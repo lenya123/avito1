@@ -173,6 +173,19 @@ export interface AvitoPostJob {
   published_at: string | null;
 }
 
+export interface AvitoItemStatsDaily {
+  id: string;
+  user_id: string;
+  session_id: string;
+  avito_item_id: string;
+  date: string;
+  views: number;
+  favorites: number;
+  contacts: number;
+  orders: number;
+  synced_at: string;
+}
+
 export interface AvitoPromotionDaily {
   id: string;
   user_id: string;

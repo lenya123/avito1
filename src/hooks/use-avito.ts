@@ -8,7 +8,8 @@ import { useActiveAccountIndex } from "@/stores/avito-account-store";
 // --- Response Types ---
 
 interface AvitoOverviewResponse {
-  profile: { id: number; name: string; email: string; phone: string; profile_url: string } | null;
+  profile: { id: number | null; name: string | null } | null;
+  shopName: string | null;
   stats: {
     totalItems: number;
     totalViews: number;
@@ -18,6 +19,30 @@ interface AvitoOverviewResponse {
     unreadChats: number;
     rating: { score: number; total_reviews: number } | null;
     balance: { real: number; bonus: number } | null;
+    // KPI по ТЗ
+    adBalance: number | null;
+    avgPromoPerDay: number;
+    activeItems: number;
+    viewsMonth: number;
+    favoritesMonth: number;
+    contactsMonth: number;
+    ordersMonth: number;
+    viewsToday: number;
+    contactsToday: number;
+  };
+  aiAgent: {
+    incoming: number;
+    responses: number;
+    conversion: number;
+    chatsMonth: number;
+    ordersMonth: number;
+  };
+  ordersStats: {
+    totalMonth: number;
+    active: number;
+    successful: number;
+    returnsActive: number;
+    returnsCompleted: number;
   };
   activeItemIds: number[];
   activeCount: number;
