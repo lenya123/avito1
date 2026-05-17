@@ -115,6 +115,94 @@ export type AiSalesCorrection = TablesType<"ai_sales_corrections">;
 export type AiSalesDailyStat = TablesType<"ai_sales_daily_stats">;
 export type AvitoItemProductMapping = TablesType<"avito_item_product_mapping">;
 
+// =====================================================
+// Standalone Автопостинг (Фаза 1)
+// Ручные типы: эти таблицы/колонки появятся в database.generated.ts
+// только после `npm run db:gen-types`. Доступ к ним — через
+// createServiceClientLoose() с кастом к этим типам.
+// =====================================================
+
+export type AvitoMediaPresetKind = "cover" | "photoset";
+export type AvitoMediaPresetSource = "manual" | "generated";
+
+export interface AvitoMediaPreset {
+  id: string;
+  user_id: string;
+  kind: AvitoMediaPresetKind;
+  set_key: string | null;
+  storage_path: string;
+  public_url: string | null;
+  source: AvitoMediaPresetSource;
+  product_id: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AvitoPostJobStatus =
+  | "queued"
+  | "processing"
+  | "published"
+  | "failed"
+  | "cancelled";
+
+export interface AvitoPostJobPhotoPlan {
+  cover?: { presetId: string; path: string } | null;
+  photoset?: Array<{ presetId: string; path: string }>;
+}
+
+export interface AvitoPostJob {
+  id: string;
+  user_id: string;
+  session_id: string;
+  product_id: string | null;
+  title: string;
+  price: number;
+  city: string;
+  metro: string | null;
+  description: string | null;
+  photo_plan: AvitoPostJobPhotoPlan;
+  status: AvitoPostJobStatus;
+  avito_item_id: string | null;
+  avito_item_url: string | null;
+  error_message: string | null;
+  attempts: number;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+}
+
+export interface AvitoPromotionDaily {
+  id: string;
+  user_id: string;
+  session_id: string;
+  date: string;
+  amount: number;
+  synced_at: string;
+}
+
+// Расширения существующих таблиц новыми колонками (до регенерации типов).
+export type AvitoItemExt = AvitoItem & {
+  orders_count: number;
+  orders_today: number;
+};
+
+export type AvitoBrowserSessionExt = {
+  id: string;
+  user_id: string;
+  account_index?: number;
+  shop_name: string | null;
+  ad_balance: number | null;
+  balance_real: number | null;
+  balance_bonus: number | null;
+  rating: number | null;
+  rating_count: number | null;
+  balance_synced_at: string | null;
+  status: string;
+  last_sync_at: string | null;
+};
+
 export type AiSalesMode = "draft" | "auto_simple" | "auto_full";
 export type AiSalesDraftStatus = "pending" | "approved" | "rejected" | "expired" | "auto_sent";
 export type AiSalesCorrectionType = "tone" | "factual" | "pricing" | "sizing" | "urgency" | "other";

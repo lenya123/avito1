@@ -816,3 +816,25 @@ supabase
   )
   .subscribe();
 ```
+
+---
+
+## Standalone Автопостинг (миграция 20260517000001)
+
+> Обособленный режим (1 оператор, N магазинов). Доступ — `createServiceClientLoose()`
+> + ручные типы из `src/types/database.ts` до `npm run db:gen-types`.
+
+| Таблица / колонка | Назначение |
+| --- | --- |
+| `products.city` | Город размещения объявления. STUB: до интеграции с панелью — `Москва`. |
+| `avito_items.orders_count` / `orders_today` | «Заказали» всего / сегодня (как на Avito, для `(+N)`). |
+| `avito_browser_sessions.ad_balance` | Аванс (кошелёк объявлений) — KPI «баланс». |
+| `avito_browser_sessions.balance_real` / `balance_bonus` | Кэш баланса с Avito OAuth. |
+| `avito_browser_sessions.rating` / `rating_count` | Рейтинг магазина (KPI). |
+| `avito_browser_sessions.shop_name` | Имя магазина для свитчера. |
+| `avito_media_presets` | Банк фото: `kind=cover` (обложки) / `kind=photoset` (фотосеты, группа `set_key`). Источник `manual`/`generated` (Nano Banana). |
+| `avito_post_jobs` | Заявки автопостинга: `queued→processing→published\|failed`. `photo_plan` JSONB (обложка+фотосет), результат `avito_item_id`. |
+| `avito_promotion_daily` | Дневной расход на продвижение по магазину (`UNIQUE(session_id,date)`). KPI = avg за 7 дней. |
+| storage bucket `avito-presets` | Файлы пресетов фото. |
+
+RLS зеркалит существующий стиль (`owner_all` через `is_owner()` + `user_own` по `auth.uid()`); приложение ходит через service client.
