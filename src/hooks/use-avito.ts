@@ -730,3 +730,108 @@ export type {
   AvitoAccountInfo,
   AvitoAccountsResponse,
 };
+
+// =============================================================================
+// Автопостинг (Фаза 4)
+// =============================================================================
+
+export interface PostJob {
+  id: string;
+  title: string;
+  price: number;
+  status: "queued" | "processing" | "published" | "failed" | "cancelled";
+  city: string;
+  metro: string | null;
+  avito_item_url: string | null;
+  error_message: string | null;
+  created_at: string;
+  published_at: string | null;
+}
+
+export function useCreatePost() {
+  const queryClient = useQueryClient();
+  const accountIndex = useActiveAccountIndex();
+  return useMutation({
+    mutationFn: async (body: {
+      productId?: string;
+      title: string;
+      price: number;
+      description?: string;
+    }) => {
+      const res = await fetch(withAccountIndex("/api/avito/post", accountIndex), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Ошибка создания");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["avito", "post-jobs"] });
+    },
+  });
+}
+
+export function usePostJobs() {
+  return useQuery<{ jobs: PostJob[] }>({
+    queryKey: ["avito", "post-jobs"],
+    queryFn: async () => {
+      const res = await fetch("/api/avito/post");
+      if (!res.ok) throw new Error("Ошибка загрузки заявок");
+      return res.json();
+    },
+    refetchInterval: 10_000,
+  });
+}
+
+export function useGenerateListingText() {
+  return useMutation({
+    mutationFn: async (body: {
+      productId?: string;
+      name?: string;
+      kind: "title" | "description" | "both";
+    }) => {
+      const res = await fetch("/api/avito/post/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Ошибка генерации");
+      return res.json() as Promise<{ title?: string; description?: string }>;
+    },
+  });
+}
+
+export interface PresetRow {
+  id: string;
+  kind: "cover" | "photoset";
+  set_key: string | null;
+  public_url: string | null;
+  source: string;
+  is_active: boolean;
+}
+
+export function usePresets() {
+  return useQuery<{ presets: PresetRow[] }>({
+    queryKey: ["avito", "presets"],
+    queryFn: async () => {
+      const res = await fetch("/api/avito/presets");
+      if (!res.ok) throw new Error("Ошибка загрузки пресетов");
+      return res.json();
+    },
+  });
+}
+
+export function useUploadPresets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (form: FormData) => {
+      const res = await fetch("/api/avito/presets", { method: "POST", body: form });
+      if (!res.ok) throw new Error((await res.json()).error || "Ошибка загрузки");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["avito", "presets"] });
+    },
+  });
+}
