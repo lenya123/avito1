@@ -2,22 +2,62 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import { BackButton, Spinner, Empty } from "@/components/ui";
-import { useAvitoItems } from "@/hooks/use-avito";
+import {
+  useAvitoItems,
+  useToggleItemActive,
+  useDeleteItem,
+} from "@/hooks/use-avito";
 import { AvitoItemCard } from "@/components/client/avito/item-card";
 import { LinkProductModal } from "@/components/client/avito/link-product-modal";
+import { PriceEditModal } from "@/components/client/avito/price-edit-modal";
 
 const PER_PAGE = 20;
 
 export default function AvitoItemsPage() {
   const [page, setPage] = useState(1);
   const [linkingItemId, setLinkingItemId] = useState<number | null>(null);
+  const [priceItemId, setPriceItemId] = useState<number | null>(null);
+  const [busyItemId, setBusyItemId] = useState<number | null>(null);
   const { data, isLoading } = useAvitoItems(page, PER_PAGE);
+  const toggleActive = useToggleItemActive();
+  const deleteItem = useDeleteItem();
 
   const linkingItem = linkingItemId
     ? data?.items.find((i) => i.avito_item_id === linkingItemId)
     : null;
+  const priceItem = priceItemId
+    ? data?.items.find((i) => i.avito_item_id === priceItemId)
+    : null;
+
+  const handleToggle = async (itemId: number, isActive: boolean) => {
+    setBusyItemId(itemId);
+    try {
+      await toggleActive.mutateAsync({ itemId, active: !isActive });
+      toast.success(
+        isActive ? "Снятие с публикации поставлено в очередь" : "Публикация поставлена в очередь"
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBusyItemId(null);
+    }
+  };
+
+  const handleDelete = async (itemId: number, title: string) => {
+    if (!window.confirm(`Удалить объявление «${title}»? Действие необратимо.`)) return;
+    setBusyItemId(itemId);
+    try {
+      await deleteItem.mutateAsync({ itemId });
+      toast.success("Удаление поставлено в очередь");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setBusyItemId(null);
+    }
+  };
 
   const totalPages = data?.pagination.totalPages ?? 1;
 
@@ -59,11 +99,19 @@ export default function AvitoItemsPage() {
                   views={item.views ?? 0}
                   favorites={item.favorites ?? 0}
                   contacts={item.contacts ?? 0}
+                  orders={item.orders_count ?? 0}
                   viewsToday={item.views_today ?? 0}
                   favoritesToday={item.favorites_today ?? 0}
                   contactsToday={item.contacts_today ?? 0}
+                  ordersToday={item.orders_today ?? 0}
                   productPhotoUrl={item.product_photo_url}
+                  busy={busyItemId === item.avito_item_id}
                   onLinkClick={() => setLinkingItemId(item.avito_item_id)}
+                  onPriceEditClick={() => setPriceItemId(item.avito_item_id)}
+                  onToggleActive={() =>
+                    handleToggle(item.avito_item_id, item.status === "active")
+                  }
+                  onDelete={() => handleDelete(item.avito_item_id, item.title)}
                 />
               </motion.div>
             ))}
@@ -146,6 +194,13 @@ export default function AvitoItemsPage() {
         avitoItemTitle={linkingItem?.title}
         currentProductId={linkingItem?.product_id}
         currentProductName={linkingItem?.product_name}
+      />
+      <PriceEditModal
+        isOpen={!!priceItemId}
+        onClose={() => setPriceItemId(null)}
+        avitoItemId={priceItemId}
+        currentPrice={priceItem?.price ?? null}
+        itemTitle={priceItem?.title}
       />
     </main>
   );

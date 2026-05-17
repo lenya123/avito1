@@ -12,7 +12,10 @@ function getUserIdFromSession(request: NextRequest): string | null {
   }
 }
 
-// GET — список продуктов для селектора привязки
+// GET — список продуктов для селектора привязки.
+// STUB: owner-panel — каталог товаров приходит из панели владельца. В standalone
+// это сид-каталог (supabase/seed.sql). При интеграции заменить источник на
+// каталог панели; формат ответа сохранить.
 export async function GET(request: NextRequest) {
   try {
     const userId = getUserIdFromSession(request);

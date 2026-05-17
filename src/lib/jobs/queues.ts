@@ -117,7 +117,21 @@ export type AutomationJobName =
   | "avito-login"
   | "sync-avito-orders"
   | "avito-relogin-check"
-  | "proxy-health-check";
+  | "proxy-health-check"
+  | "avito-item-action"
+  | "avito-post-listing";
+
+export interface AvitoItemActionJobData {
+  sessionId: string;
+  userId: string;
+  avitoItemId: string;
+  avitoItemUrl: string;
+  action: "activate" | "deactivate" | "delete";
+}
+
+export interface AvitoPostListingJobData {
+  postJobId: string;
+}
 
 // Singleton для очереди
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -893,4 +907,34 @@ export async function scheduleProxyHealthCheck(): Promise<void> {
   );
 
   console.log("[Jobs] Scheduled proxy-health-check every 30 min");
+}
+
+// =============================================================================
+// Standalone: действия над объявлением (вкл/выкл/удаление) через браузер
+// =============================================================================
+export async function scheduleAvitoItemAction(
+  data: AvitoItemActionJobData
+): Promise<string> {
+  const queue = getAutomationQueue();
+  const jobId = `item-action-${data.sessionId}-${data.avitoItemId}-${Date.now()}`;
+  await queue.add("avito-item-action", data, { jobId });
+  console.log(
+    `[Jobs] Scheduled avito-item-action ${data.action} for item ${data.avitoItemId}`
+  );
+  return jobId;
+}
+
+// =============================================================================
+// Standalone: автопостинг объявления через браузер (Фаза 4)
+// =============================================================================
+export async function scheduleAvitoPostListing(postJobId: string): Promise<string> {
+  const queue = getAutomationQueue();
+  const jobId = `post-listing-${postJobId}`;
+  await queue.add(
+    "avito-post-listing",
+    { postJobId } as AvitoPostListingJobData,
+    { jobId }
+  );
+  console.log(`[Jobs] Scheduled avito-post-listing for ${postJobId}`);
+  return jobId;
 }

@@ -53,6 +53,9 @@ interface AvitoItemWithProduct extends AvitoItem {
   product_id: string | null;
   product_name: string | null;
   product_photo_url: string | null;
+  // Standalone-колонки (есть в данных, появятся в типах после db:gen-types)
+  orders_count?: number | null;
+  orders_today?: number | null;
 }
 
 interface AvitoItemsResponse {
@@ -518,6 +521,61 @@ export function useUpdateItemPrice() {
   return useMutation({
     mutationFn: ({ itemId, price }: { itemId: number; price: number }) =>
       updateItemPrice(itemId, price, accountIndex),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["avito", "items"] });
+      queryClient.invalidateQueries({ queryKey: ["avito", "overview"] });
+    },
+  });
+}
+
+// --- Item on/off + delete (через браузер в воркере) ---
+
+async function toggleItemActive(itemId: number, active: boolean, accountIndex: number) {
+  const response = await fetch(
+    withAccountIndex(`/api/avito/items/${itemId}/status`, accountIndex),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active }),
+    }
+  );
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Ошибка изменения статуса");
+  }
+  return response.json();
+}
+
+async function deleteItem(itemId: number, accountIndex: number) {
+  const response = await fetch(
+    withAccountIndex(`/api/avito/items/${itemId}`, accountIndex),
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Ошибка удаления");
+  }
+  return response.json();
+}
+
+export function useToggleItemActive() {
+  const queryClient = useQueryClient();
+  const accountIndex = useActiveAccountIndex();
+  return useMutation({
+    mutationFn: ({ itemId, active }: { itemId: number; active: boolean }) =>
+      toggleItemActive(itemId, active, accountIndex),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["avito", "items"] });
+      queryClient.invalidateQueries({ queryKey: ["avito", "overview"] });
+    },
+  });
+}
+
+export function useDeleteItem() {
+  const queryClient = useQueryClient();
+  const accountIndex = useActiveAccountIndex();
+  return useMutation({
+    mutationFn: ({ itemId }: { itemId: number }) => deleteItem(itemId, accountIndex),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["avito", "items"] });
       queryClient.invalidateQueries({ queryKey: ["avito", "overview"] });

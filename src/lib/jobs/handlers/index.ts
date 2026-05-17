@@ -20,3 +20,5 @@ export { handleAvitoLogin } from "./avito-login";
 export { handleSyncAvitoOrders } from "./sync-avito-orders";
 export { handleAvitoReloginCheck } from "./avito-relogin-check";
 export { handleProxyHealthCheck } from "./proxy-health-check";
+export { handleAvitoItemAction } from "./avito-item-action";
+export { handleAvitoPostListing } from "./avito-post-listing";

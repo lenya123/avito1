@@ -28,6 +28,8 @@ import {
   handleSyncAvitoOrders,
   handleAvitoReloginCheck,
   handleProxyHealthCheck,
+  handleAvitoItemAction,
+  handleAvitoPostListing,
 } from "./handlers";
 
 // Singleton для воркера
@@ -116,6 +118,17 @@ async function processJob(job: Job): Promise<void> {
 
       case "proxy-health-check":
         await handleProxyHealthCheck(job);
+        break;
+
+      // Standalone: управление объявлениями + автопостинг
+      case "avito-item-action":
+        await handleAvitoItemAction(job as Job<import("./queues").AvitoItemActionJobData>);
+        break;
+
+      case "avito-post-listing":
+        await handleAvitoPostListing(
+          job as Job<import("./queues").AvitoPostListingJobData>
+        );
         break;
 
       default:
