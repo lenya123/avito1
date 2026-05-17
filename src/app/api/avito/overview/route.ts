@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
         .select("id", { count: "exact", head: true })
         .eq("session_id", sessionId)
         .gt("unread_count", 0),
-      supabase
+      loose
         .from("avito_items")
         .select(
           "views, favorites, contacts, views_today, favorites_today, contacts_today, orders_count, orders_today"

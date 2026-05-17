@@ -21,12 +21,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Avito не подключен" }, { status: 400 });
     }
 
+    const numericItemId = parseInt(itemId, 10);
+    if (!numericItemId || numericItemId <= 0) {
+      return NextResponse.json({ error: "Некорректный ID объявления" }, { status: 400 });
+    }
+
     const supabase = createServiceClient();
     const { data: item } = await supabase
       .from("avito_items")
       .select("url, avito_item_id")
       .eq("session_id", session.id)
-      .eq("avito_item_id", itemId)
+      .eq("avito_item_id", numericItemId)
       .maybeSingle();
 
     if (!item?.url) {

@@ -43,11 +43,14 @@ export async function handleAvitoPostListing(
     let description = jobRow.description ?? "";
 
     if (jobRow.product_id) {
-      const { data: product } = await supabase
+      // loose: products.city отсутствует в database.generated.ts до db:gen-types
+      const { data: productRaw } = await loose
         .from("products")
         .select("name, description, brand, category, photo_urls, photo_main_index, measurements, city")
         .eq("id", jobRow.product_id)
         .maybeSingle();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const product = productRaw as any;
 
       if (product) {
         productPhotos = (product.photo_urls as string[] | null) ?? [];
@@ -106,17 +109,18 @@ export async function handleAvitoPostListing(
     // Минимальная строка в кеше — синк дополнит метрики.
     // Без зависимости от уникального индекса: проверяем наличие, потом вставляем.
     if (result.avitoItemId) {
+      const numericId = Number(result.avitoItemId);
       const { data: existing } = await supabase
         .from("avito_items")
         .select("id")
         .eq("session_id", jobRow.session_id)
-        .eq("avito_item_id", result.avitoItemId)
+        .eq("avito_item_id", numericId)
         .maybeSingle();
       if (!existing) {
         await supabase.from("avito_items").insert({
           user_id: jobRow.user_id,
           session_id: jobRow.session_id,
-          avito_item_id: result.avitoItemId,
+          avito_item_id: numericId,
           title,
           price: jobRow.price,
           status: "active",

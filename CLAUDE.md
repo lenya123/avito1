@@ -92,8 +92,13 @@ middleware.ts  Supabase auth
 | `src/lib/telegram/notifications.ts`  | Уведомления через ботов    |
 | `src/types/database.ts`              | Ручные типы БД             |
 
-## Статус
+## Статус (Standalone-форк)
 
-✅ Клиент · Отправщик · Владелец · Telegram · AI-поддержка · BullMQ
-🔧 Доставка (трекинг) · Avito API
-🔲 AI-агент продаж · Платежи ЮKassa
+Standalone: 1 оператор → N магазинов Avito. Точки интеграции с панелью
+владельца помечены `// STUB: owner-panel`. См. `docs/STANDALONE.md`.
+
+✅ Каркас (1-оператор) · Дашборд по ТЗ · Управление объявлениями ·
+   Автопостинг · Заказы с Avito · AI-реле (текст/фото/голос) · BullMQ
+🔧 Браузерные селекторы Avito (помечены `// STUB: verify selectors`) ·
+   AI-ключи (OpenAI/Gemini — заглушки без ключей)
+🔲 Интеграция в панель владельца (каталог товаров, город, страница заказов)

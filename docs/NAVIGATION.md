@@ -1,6 +1,26 @@
 # Навигация приложения
 
-## Сайт клиента (5 разделов в BottomNav)
+## Standalone-режим (оператор, 5 разделов в BottomNav)
+
+| Раздел | URL | Описание |
+|--------|-----|----------|
+| **Дашборд** | `/avito` | KPI по ТЗ, AI-агент, статистика по заказам |
+| **Объявления** | `/avito/items` | Стата `(+сегодня)`/«заказали», цена, вкл-выкл, удаление, привязка |
+| **Создать** | `/avito/create` | Автопостинг + менеджер пресетов фото |
+| **Чаты** | `/avito/chats` | Переписки Avito |
+| **Ещё** | `/avito/settings` | Webhook/настройки |
+
+Вход: `/auth/login` (логин/пароль из .env). `/` → `/avito`. Разделы
+owner/shipper/client ниже физически сохранены, но из навигации убраны
+(см. `STANDALONE.md`). Новые API: `/api/avito/{post,post/generate,presets,ai-relay}`,
+`POST /api/avito/items/[id]/status`, `DELETE /api/avito/items/[id]`,
+`/api/owner/avito-orders` (seam панели).
+
+---
+
+## Сайт клиента (исходный — вне навигации standalone)
+
+### 5 разделов в BottomNav
 
 | Раздел | URL | Описание |
 |--------|-----|----------|
