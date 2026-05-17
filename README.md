@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Avito Автопостинг — Standalone
 
-## Getting Started
+Обособленный инструмент одного оператора для управления N магазинами Avito:
+KPI-дашборд, автопостинг объявлений (браузерная автоматизация + антидетект на каждый
+магазин), подтягивание заказов с Avito, AI-агент переписок (текст/фото/голос).
 
-First, run the development server:
+Форк `avito-project`. Мультиарендность (клиенты/подписки/paywall/owner/shipper)
+заменена на единственного оператора. Точки интеграции с панелью владельца помечены
+комментариями `// STUB: owner-panel`.
+
+## Стек
+
+Next.js 14 (App Router) · TypeScript · Tailwind · Framer Motion · Supabase (PostgreSQL+RLS)
+· BullMQ + Redis · Puppeteer (stealth) · OpenAI (GPT/Whisper/TTS) · Gemini «Nano Banana» (обложки)
+
+## Быстрый старт
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local        # заполнить значения
+npm install
+npm run db:migrate                # применить миграции к Supabase
+npm run dev                       # http://localhost:3000
+npm run worker:dev                # BullMQ-воркер (постинг/синк/AI) — отдельный процесс
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Вход: `OPERATOR_LOGIN` / `OPERATOR_PASSWORD` из `.env.local`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Ключевые env
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Переменная | Назначение |
+| --- | --- |
+| `OPERATOR_LOGIN` / `OPERATOR_PASSWORD` | Учётка оператора (обязательно сменить в проде) |
+| `OPERATOR_USER_ID` | Фиксированный UUID строки оператора в `users` |
+| `OPERATOR_AVITO_ACCOUNT_LIMIT` | Сколько магазинов можно подключить |
+| `NEXT_PUBLIC_SUPABASE_URL` / `*_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase |
+| `REDIS_URL` | BullMQ |
+| `OPENAI_API_KEY` | Описания/названия/чат-агент/Whisper/TTS |
+| `GEMINI_API_KEY` | Генератор обложек (без ключа → pass-through) |
 
-## Learn More
+## Авторизация
 
-To learn more about Next.js, take a look at the following resources:
+Один оператор. Логин/пароль из `.env`, сессия — подписанная cookie. Под капотом
+оператор = одна привилегированная строка `users` (`is_vibe_plus`, высокий
+`avito_account_limit`), под которой живут все Avito-сессии (`account_index` = «магазин»).
+См. `src/lib/constants/operator.ts`. // STUB: owner-panel.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Статус по фазам
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [x] Фаза 0 — каркас standalone (форк, 1-операторский логин, навигация)
+- [ ] Фаза 1 — схема БД и инфраструктура
+- [ ] Фаза 2 — дашборд по ТЗ
+- [ ] Фаза 3 — управление объявлениями
+- [ ] Фаза 4 — автопостинг
+- [ ] Фаза 5 — заказы с Avito
+- [ ] Фаза 6 — AI-реле (текст/фото/голос)
+- [ ] Фаза 7 — полировка

@@ -6,12 +6,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { useNavigationStore } from "@/stores/navigation-store";
 import { Header, NavLink, UserMenu, BottomNav, NavIcons, Spinner } from "@/components/ui";
 
+// Standalone-навигация оператора (один оператор, N магазинов Avito).
 const navItems = [
-  { href: "/catalog", icon: NavIcons.catalog, label: "Каталог" },
-  { href: "/stats", icon: NavIcons.stats, label: "Заказы" },
-  { href: "/education", icon: NavIcons.education, label: "Обучение" },
-  { href: "/support", icon: NavIcons.support, label: "Помощь" },
-  { href: "/profile", icon: NavIcons.profile, label: "Профиль" },
+  { href: "/avito", icon: NavIcons.stats, label: "Дашборд" },
+  { href: "/avito/items", icon: NavIcons.catalog, label: "Объявления" },
+  { href: "/avito/create", icon: NavIcons.create, label: "Создать" },
+  { href: "/avito/chats", icon: NavIcons.support, label: "Чаты" },
+  { href: "/avito/settings", icon: NavIcons.settings, label: "Ещё" },
 ];
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -19,33 +20,26 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const { user, logout, isInitialized } = useAuth();
   const targetHref = useNavigationStore((state) => state.targetHref);
 
-  // Показываем лоадер если идёт навигация на другую страницу
   const isNavigating = targetHref !== null && targetHref !== pathname;
 
-  // Определяем активную страницу по pathname
   const activeHref = useMemo(() => {
-    if (pathname.startsWith("/catalog")) return "/catalog";
-    if (pathname.startsWith("/stats")) return "/stats";
-    if (pathname.startsWith("/education")) return "/education";
-    if (pathname.startsWith("/support")) return "/support";
-    if (pathname.startsWith("/profile")) return "/profile";
-    if (pathname.startsWith("/avito")) return "/profile"; // Avito — подраздел профиля
-    if (pathname.startsWith("/order/")) return "/catalog"; // Страница заказа относится к каталогу
-    return "/catalog";
+    if (pathname === "/avito" || pathname === "/avito/operations" || pathname === "/avito/reviews")
+      return "/avito";
+    if (pathname.startsWith("/avito/items")) return "/avito/items";
+    if (pathname.startsWith("/avito/create")) return "/avito/create";
+    if (pathname.startsWith("/avito/chats")) return "/avito/chats";
+    if (pathname.startsWith("/avito/settings")) return "/avito/settings";
+    if (pathname.startsWith("/avito")) return "/avito";
+    return "/avito";
   }, [pathname]);
 
-  // Пока авторизация не инициализирована — показываем layout со спиннером
   if (!isInitialized) {
     return (
       <div className="min-h-dvh bg-primary">
-        {/* Header только на desktop */}
         <Header />
-
-        {/* Спиннер по центру: на мобиле между верхом и BottomNav (64px), на desktop минус Header (64px) */}
         <main className="flex items-center justify-center h-[calc(100dvh-64px)]">
           <Spinner size="lg" />
         </main>
-
         <BottomNav items={navItems} activeHref={activeHref} />
       </div>
     );
@@ -53,35 +47,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-dvh bg-primary pb-24 md:pb-6">
-      {/* Header — общий для всех страниц */}
       <Header
-        logoHref="/catalog"
+        logoHref="/avito"
         rightContent={
-          <UserMenu
-            name={user?.name || user?.telegramUsername || "Клиент"}
-            balance={(user?.deposit || 0) + (user?.referralDeposit || 0)}
-            onLogout={logout}
-          />
+          <UserMenu name={user?.name || "Оператор"} balance={0} onLogout={logout} />
         }
       >
-        <NavLink href="/catalog" active={activeHref === "/catalog"}>
-          Каталог
+        <NavLink href="/avito" active={activeHref === "/avito"}>
+          Дашборд
         </NavLink>
-        <NavLink href="/stats" active={activeHref === "/stats"}>
-          Заказы
+        <NavLink href="/avito/items" active={activeHref === "/avito/items"}>
+          Объявления
         </NavLink>
-        <NavLink href="/education" active={activeHref === "/education"}>
-          Обучение
+        <NavLink href="/avito/create" active={activeHref === "/avito/create"}>
+          Создать
         </NavLink>
-        <NavLink href="/support" active={activeHref === "/support"}>
-          Помощь
+        <NavLink href="/avito/chats" active={activeHref === "/avito/chats"}>
+          Чаты
         </NavLink>
-        <NavLink href="/profile" active={activeHref === "/profile"}>
-          Профиль
+        <NavLink href="/avito/settings" active={activeHref === "/avito/settings"}>
+          Ещё
         </NavLink>
       </Header>
 
-      {/* Контент страницы или лоадер при навигации */}
       {isNavigating ? (
         <main className="flex items-center justify-center h-[calc(100dvh-64px)]">
           <Spinner size="lg" />
@@ -90,7 +78,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         children
       )}
 
-      {/* Bottom navigation — общая для всех страниц */}
       <BottomNav items={navItems} activeHref={activeHref} />
     </div>
   );

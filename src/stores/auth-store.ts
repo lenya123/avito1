@@ -40,7 +40,7 @@ interface AuthState {
   error: string | null;
 
   // Actions
-  login: (siteKey: string) => Promise<boolean>;
+  login: (login: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   clearError: () => void;
@@ -55,14 +55,14 @@ export const useAuthStore = create<AuthState>()(
       isInitialized: false,
       error: null,
 
-      login: async (siteKey: string) => {
+      login: async (login: string, password: string) => {
         set({ isLoading: true, error: null });
 
         try {
           const response = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ siteKey }),
+            body: JSON.stringify({ login, password }),
           });
 
           const data = await response.json();
