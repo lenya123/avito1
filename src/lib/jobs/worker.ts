@@ -30,6 +30,7 @@ import {
   handleProxyHealthCheck,
   handleAvitoItemAction,
   handleAvitoPostListing,
+  handleSyncAvitoBalance,
 } from "./handlers";
 
 // Singleton для воркера
@@ -129,6 +130,10 @@ async function processJob(job: Job): Promise<void> {
         await handleAvitoPostListing(
           job as Job<import("./queues").AvitoPostListingJobData>
         );
+        break;
+
+      case "sync-avito-balance":
+        await handleSyncAvitoBalance(job);
         break;
 
       default:

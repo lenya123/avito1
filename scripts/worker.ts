@@ -44,6 +44,7 @@ import {
   scheduleAvitoOrdersSync,
   scheduleAvitoReloginCheck,
   scheduleProxyHealthCheck,
+  scheduleAvitoBalanceSync,
 } from "../src/lib/jobs/queues";
 
 console.log("🚀 Starting BullMQ Automation Worker...");
@@ -65,6 +66,7 @@ void (async () => {
       scheduleAvitoOrdersSync(),
       scheduleAvitoReloginCheck(),
       scheduleProxyHealthCheck(),
+      scheduleAvitoBalanceSync(),
     ]);
     console.log("✅ Repeatable jobs registered.");
   } catch (err) {

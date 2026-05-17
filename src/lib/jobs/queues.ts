@@ -119,7 +119,8 @@ export type AutomationJobName =
   | "avito-relogin-check"
   | "proxy-health-check"
   | "avito-item-action"
-  | "avito-post-listing";
+  | "avito-post-listing"
+  | "sync-avito-balance";
 
 export interface AvitoItemActionJobData {
   sessionId: string;
@@ -907,6 +908,29 @@ export async function scheduleProxyHealthCheck(): Promise<void> {
   );
 
   console.log("[Jobs] Scheduled proxy-health-check every 30 min");
+}
+
+/**
+ * Standalone: периодический синк баланса/аванса/рейтинга/расхода на
+ * продвижение через Avito OAuth. Каждые 4 часа.
+ */
+export async function scheduleAvitoBalanceSync(): Promise<void> {
+  const queue = getAutomationQueue();
+  const repeatableJobs = await queue.getRepeatableJobs();
+  for (const job of repeatableJobs) {
+    if (job.name === "sync-avito-balance") {
+      await queue.removeRepeatableByKey(job.key);
+    }
+  }
+  await queue.add(
+    "sync-avito-balance",
+    {},
+    {
+      jobId: "sync-avito-balance-periodic",
+      repeat: { every: 4 * 60 * 60 * 1000 }, // каждые 4 часа
+    }
+  );
+  console.log("[Jobs] Scheduled sync-avito-balance every 4h");
 }
 
 // =============================================================================
