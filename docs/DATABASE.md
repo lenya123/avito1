@@ -838,3 +838,14 @@ supabase
 | storage bucket `avito-presets` | Файлы пресетов фото. |
 
 RLS зеркалит существующий стиль (`owner_all` через `is_owner()` + `user_own` по `auth.uid()`); приложение ходит через service client.
+
+### Заказы с Avito (миграции 20260517000002/3)
+
+| Колонка / таблица | Назначение |
+| --- | --- |
+| `avito_item_stats_daily` | Дневные срезы метрик объявления (для KPI «за месяц»). Пишет sync-orders. |
+| `avito_orders.avito_item_id` | По какой объяве заказ (эвристика по заголовку, // STUB). |
+| `avito_orders.return_code` | Код возврата при возврате (эвристика из info/status, // STUB). |
+| `avito_orders.source_tag` | Тег «заказ с авито» для отдельной страницы панели владельца. |
+
+Seam для панели: `GET /api/owner/avito-orders` (тег `source_tag='avito'`). Список заказов в интерфейс оператора не внедряется (по ТЗ).
