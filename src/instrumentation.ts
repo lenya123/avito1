@@ -11,6 +11,14 @@ export async function register() {
     console.warn("[instrumentation] REDIS_URL not set — worker disabled");
     return;
   }
+  // Standalone: воркер запускается отдельным systemd-сервисом (avito-worker).
+  // Включи INSTRUMENTATION_WORKER=1 чтобы Next.js также форкнул воркер
+  // (для dev/одиночного процесса). В проде это вызывает гонку с systemd-воркером
+  // на одну BullMQ-очередь и на прокси.
+  if (process.env.INSTRUMENTATION_WORKER !== "1") {
+    console.log("[instrumentation] Worker fork disabled (use systemd avito-worker)");
+    return;
+  }
 
   setTimeout(() => {
     try {
