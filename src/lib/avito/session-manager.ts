@@ -87,6 +87,30 @@ function randomDelay(min: number, max: number): Promise<void> {
   return new Promise((r) => setTimeout(r, min + Math.random() * (max - min)));
 }
 
+/**
+ * Проверяет, что proxy-chain мост действительно форвардит на upstream
+ * (защита от race-condition внутри BullMQ worker, когда anonymizeProxy
+ * вернул URL, но listener ещё не полностью обрабатывает CONNECT).
+ */
+async function selfTestBridge(localProxyUrl: string): Promise<boolean> {
+  try {
+    const { execFile } = await import("child_process");
+    return await new Promise<boolean>((resolve) => {
+      execFile(
+        "curl",
+        [
+          "-sS", "--max-time", "8", "--proxy", localProxyUrl,
+          "-o", "/dev/null", "-w", "%{http_code}",
+          "https://www.avito.ru/",
+        ],
+        (err, stdout) => resolve(!err && stdout.trim() === "200")
+      );
+    });
+  } catch {
+    return false;
+  }
+}
+
 /** Сохранить скриншот+HTML страницы для отладки (в /var/log/avito-debug или $AVITO_DEBUG_DIR). */
 async function dumpDebug(page: PuppeteerPage, label: string): Promise<void> {
   try {
@@ -264,7 +288,11 @@ export async function loginAndExtractCookies(
     proxyChain = await import("proxy-chain");
     localProxyUrl = await proxyChain.anonymizeProxy(proxyUrl);
     launchArgs.push(`--proxy-server=${localProxyUrl}`);
-    console.error(`[session-manager] proxy-chain bridge: ${localProxyUrl} → upstream`);
+    // Self-test: убеждаемся, что мост реально форвардит на upstream
+    const okBridge = await selfTestBridge(localProxyUrl);
+    console.error(
+      `[session-manager] proxy-chain bridge: ${localProxyUrl} → upstream (selfTest=${okBridge})`
+    );
   }
 
   const browser = await puppeteer.default.launch({
