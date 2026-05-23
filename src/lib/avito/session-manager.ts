@@ -211,21 +211,27 @@ async function detectPostLoginState(
       const url = window.location.href;
       const body = (document.body?.innerText ?? "").toLowerCase();
 
-      // CAPTCHA
+      // CAPTCHA (включая hcaptcha/recaptcha/yandex-smartcaptcha)
       if (
         url.includes("captcha") ||
         document.querySelector(
-          '.captcha, #captcha, [data-testid="captcha"], iframe[src*="captcha"]'
-        )
+          '.captcha, #captcha, [data-testid="captcha"], iframe[src*="captcha"], iframe[src*="hcaptcha"], iframe[src*="recaptcha"], iframe[src*="smartcaptcha"]'
+        ) ||
+        body.includes("подтвердите, что вы не робот") ||
+        body.includes("докажите, что вы человек")
       ) {
         return "captcha";
       }
 
-      // Поле ввода SMS кода
+      // Поле ввода SMS кода (расширенные селекторы)
       if (
         document.querySelector('input[name="code"]') ||
         document.querySelector('input[name="smsCode"]') ||
-        (document.querySelector('input[type="tel"]') && body.includes("код"))
+        document.querySelector('input[data-marker*="sms"]') ||
+        document.querySelector('input[data-marker*="code"]') ||
+        document.querySelector('input[autocomplete="one-time-code"]') ||
+        ((document.querySelector('input[type="tel"]') || document.querySelector('input[inputmode="numeric"]')) &&
+          (body.includes("код") || body.includes("смс") || body.includes("sms")))
       ) {
         return "sms";
       }
@@ -240,19 +246,42 @@ async function detectPostLoginState(
         return "app_confirm";
       }
 
-      // Успешный выход с экрана логина
-      if (!url.includes("#login") && !url.includes("/login") && !url.includes("authsrc=h")) {
+      // Ошибка логина/пароля
+      if (
+        body.includes("неверный пароль") ||
+        body.includes("неправильный логин") ||
+        body.includes("не удалось войти") ||
+        body.includes("аккаунт не найден")
+      ) {
+        return "bad_creds";
+      }
+
+      // Успешный вход — ищем явные маркеры залогиненного состояния
+      const loggedIn =
+        document.querySelector('[data-marker="header/profile"]') ||
+        document.querySelector('[data-marker="header/account"]') ||
+        document.querySelector('[data-marker="header/messenger"]') ||
+        document.querySelector('a[href*="/profile"][data-marker]');
+      const noLoginButton = !document.querySelector('[data-marker="header/login-button"]');
+      if (loggedIn || (noLoginButton && !url.includes("login"))) {
         return "success";
       }
 
       return "waiting";
     });
 
-    if (state !== "waiting") return state as "success" | "sms" | "app_confirm" | "captcha";
+    if (state !== "waiting") {
+      if (state === "bad_creds") {
+        throw new Error("Avito: неверный логин/пароль");
+      }
+      return state as "success" | "sms" | "app_confirm" | "captcha";
+    }
 
     await randomDelay(POST_LOGIN_POLL_INTERVAL_MS, POST_LOGIN_POLL_INTERVAL_MS + 100);
   }
 
+  // Не дождались — дампим страницу для диагностики
+  await dumpDebug(page, "avito-login-post-timeout");
   throw new Error("Timeout waiting for post-login state");
 }
 
