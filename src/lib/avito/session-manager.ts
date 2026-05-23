@@ -431,7 +431,9 @@ export async function loginAndExtractCookies(
     // Ждём пока страница полностью отрисуется
     await randomDelay(2500, 5000);
 
-    // Кликаем «Войти» в шапке — открывает модалку логина
+    // Кликаем «Войти» в шапке — открывает модалку логина.
+    // ВАЖНО: humanClick (mouse coords) у stealth-сборки иногда не триггерит
+    // React event handlers Avito, поэтому используем JS-клик как первичный.
     const headerLoginSelectors = [
       '[data-marker="header/login-button"]',
       'a[href*="login"][data-marker]',
@@ -439,9 +441,17 @@ export async function loginAndExtractCookies(
     ];
     let openedModal = false;
     for (const sel of headerLoginSelectors) {
-      const el = await page.$(sel).catch(() => null);
-      if (el) {
-        await humanClick(page, sel).catch(() => el.click().catch(() => {}));
+      const exists = await page.$(sel).catch(() => null);
+      if (exists) {
+        // JS-клик надёжнее обходит stealth-проблемы с координатами
+        await page
+          .evaluate((s: string) => {
+            const el = document.querySelector(s) as HTMLElement | null;
+            if (el) el.click();
+          }, sel)
+          .catch(() => {});
+        // подкрепляем человеческим кликом для надёжности
+        await humanClick(page, sel).catch(() => {});
         openedModal = true;
         break;
       }
@@ -450,7 +460,8 @@ export async function loginAndExtractCookies(
       await dumpDebug(page, "avito-login-no-header-button");
       throw new Error("Кнопка «Войти» в шапке Авито не найдена (вёрстка изменилась)");
     }
-    await randomDelay(1500, 3000);
+    // даём модалке время прорисоваться (React + анимации)
+    await randomDelay(3000, 5000);
 
     // Вводим логин — расширенные селекторы для разных версий Авито
     const loginSelector = [
