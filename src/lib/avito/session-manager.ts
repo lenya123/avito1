@@ -454,8 +454,12 @@ export async function loginAndExtractCookies(
 
     // Вводим логин — расширенные селекторы для разных версий Авито
     const loginSelector = [
-      'input[name="login"]',
+      // Современный Avito
+      'input[data-marker="login-form/login/input"]',
+      'input[data-marker="login-form/login"]',
       'input[data-marker="login/input"]',
+      // Generic
+      'input[name="login"]',
       'input[type="tel"]',
       'input[type="email"]',
       'input[type="text"][autocomplete="username"]',
@@ -477,12 +481,12 @@ export async function loginAndExtractCookies(
     await randomDelay(400, 900);
 
     const submitSelector =
-      'button[type="submit"], button[data-marker="login/submit"], button[data-marker="auth/submit"]';
+      'button[data-marker="login-form/submit"], button[type="submit"], button[data-marker="login/submit"], button[data-marker="auth/submit"]';
     await humanClick(page, submitSelector);
 
     // Ждём поля пароля
     const passwordSelector =
-      'input[type="password"], input[data-marker="login/password"], input[data-marker="auth/password"]';
+      'input[data-marker="login-form/password/input"], input[type="password"], input[data-marker="login/password"], input[data-marker="auth/password"]';
     await page.waitForSelector(passwordSelector, { timeout: LOGIN_TIMEOUT_MS });
 
     await randomDelay(600, 1400);
