@@ -30,7 +30,7 @@ export async function handleAvitoItemAction(
       .from("avito_items")
       .delete()
       .eq("session_id", sessionId)
-      .eq("avito_item_id", avitoItemId);
+      .eq("avito_item_id", Number(avitoItemId));
   } else {
     await supabase
       .from("avito_items")
@@ -39,7 +39,7 @@ export async function handleAvitoItemAction(
         updated_at: new Date().toISOString(),
       })
       .eq("session_id", sessionId)
-      .eq("avito_item_id", avitoItemId);
+      .eq("avito_item_id", Number(avitoItemId));
   }
 
   console.log(`[avito-item-action] ${action} OK for item ${avitoItemId}`);
