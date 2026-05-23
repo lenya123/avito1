@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { OPERATOR_USER_ID } from "@/lib/constants/operator";
-import { mapOperatorUser } from "../login/route";
+import { mapOperatorUser } from "@/lib/auth/operator-user";
 
 /**
  * Standalone: возвращает данные единственного оператора по сессии.

@@ -38,7 +38,6 @@ export default function CreateListingPage() {
 
   const { data: productsData } = useAvitoProducts(search, true);
   const products = productsData?.products ?? [];
-  const selectedProduct = products.find((p) => p.id === productId);
 
   const createPost = useCreatePost();
   const genText = useGenerateListingText();
