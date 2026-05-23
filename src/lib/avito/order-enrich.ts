@@ -9,7 +9,11 @@ import { classifyAvitoOrder } from "./order-status";
 
 /** Нормализация заголовка для матчинга объявления. */
 function norm(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, " ").replace(/[^\p{L}\p{N} ]/gu, "").trim();
+  return s
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^a-zа-яё0-9 ]/gi, "")
+    .trim();
 }
 
 /**
