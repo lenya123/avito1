@@ -60,10 +60,15 @@ const NAVIGATION_TIMEOUT_MS = 60_000;
 const POST_LOGIN_POLL_INTERVAL_MS = 500;
 const POST_LOGIN_MAX_WAIT_MS = 20_000;
 
-/** Stealth plugin регистрируется один раз — promise-based lock для concurrency */
+/** Stealth plugin регистрируется один раз — promise-based lock для concurrency.
+ *  Через AVITO_DISABLE_STEALTH=1 можно полностью отключить (отладка прокси-auth). */
 let _stealthPromise: Promise<void> | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ensureStealthRegistered(puppeteer: any): Promise<void> {
+async function ensureStealthRegistered(puppeteer: any): Promise<void> {
+  if (process.env.AVITO_DISABLE_STEALTH === "1") {
+    console.error("[session-manager] stealth DISABLED via AVITO_DISABLE_STEALTH=1");
+    return;
+  }
   if (!_stealthPromise) {
     _stealthPromise = (async () => {
       const StealthPlugin = await import("puppeteer-extra-plugin-stealth");
