@@ -88,22 +88,47 @@ function randomDelay(min: number, max: number): Promise<void> {
 }
 
 /**
- * Проверяет, что proxy-chain мост действительно форвардит на upstream
- * (защита от race-condition внутри BullMQ worker, когда anonymizeProxy
- * вернул URL, но listener ещё не полностью обрабатывает CONNECT).
+ * Проверяет, что proxy-chain мост:
+ *  1) реально слушает (TCP connect),
+ *  2) форвардит на upstream (CONNECT + GET через curl).
+ * Логирует подробности — для диагностики race-condition в BullMQ worker.
  */
 async function selfTestBridge(localProxyUrl: string): Promise<boolean> {
+  const url = new URL(localProxyUrl);
+  const host = url.hostname;
+  const port = parseInt(url.port);
+  // 1) TCP connect — что listener вообще принимает соединения
+  const tcpOk = await new Promise<boolean>((resolve) => {
+    import("net").then(({ createConnection }) => {
+      const sock = createConnection({ host, port, timeout: 3000 });
+      sock.once("connect", () => { sock.end(); resolve(true); });
+      sock.once("error", (e) => {
+        console.error(`[selfTest] TCP connect ${host}:${port} fail: ${e.message}`);
+        resolve(false);
+      });
+      sock.once("timeout", () => { sock.destroy(); resolve(false); });
+    }).catch(() => resolve(false));
+  });
+  console.error(`[selfTest] tcp ${host}:${port} = ${tcpOk}`);
+  if (!tcpOk) return false;
+  // 2) Полный CONNECT через curl
   try {
     const { execFile } = await import("child_process");
     return await new Promise<boolean>((resolve) => {
       execFile(
         "curl",
         [
-          "-sS", "--max-time", "8", "--proxy", localProxyUrl,
-          "-o", "/dev/null", "-w", "%{http_code}",
+          "-sS", "-v", "--max-time", "10", "--proxy", localProxyUrl,
+          "-o", "/dev/null", "-w", "HTTP=%{http_code}",
           "https://www.avito.ru/",
         ],
-        (err, stdout) => resolve(!err && stdout.trim() === "200")
+        { maxBuffer: 1024 * 1024 },
+        (err, stdout, stderr) => {
+          const code = (stdout.match(/HTTP=(\d+)/) || [])[1] || "?";
+          const errBrief = (stderr || "").split("\n").filter(l => l.match(/CONNECT|HTTP\/|< |error:/)).slice(0, 8).join(" | ");
+          console.error(`[selfTest] curl exit=${err?.code ?? 0} code=${code} stderr: ${errBrief}`);
+          resolve(!err && code === "200");
+        }
       );
     });
   } catch {
