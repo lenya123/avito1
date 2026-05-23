@@ -102,6 +102,29 @@ function randomDelay(min: number, max: number): Promise<void> {
   return new Promise((r) => setTimeout(r, min + Math.random() * (max - min)));
 }
 
+/** Сохранить скриншот+HTML страницы для отладки (в /var/log/avito-debug или $AVITO_DEBUG_DIR). */
+async function dumpDebug(page: PuppeteerPage, label: string): Promise<void> {
+  try {
+    const { mkdir, writeFile } = await import("fs/promises");
+    const { tmpdir } = await import("os");
+    const { join } = await import("path");
+    const dir = process.env.AVITO_DEBUG_DIR || join(tmpdir(), "avito-debug");
+    await mkdir(dir, { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const base = join(dir, `${label}-${ts}`);
+    const shot = `${base}.png`;
+    const html = `${base}.html`;
+    await page.screenshot({ path: shot, fullPage: true }).catch(() => {});
+    const content = await page.content().catch(() => "");
+    await writeFile(html, content).catch(() => {});
+    console.error(
+      `[session-manager] dumped: ${shot} / ${html} (url: ${page.url?.() ?? ""})`
+    );
+  } catch (e) {
+    console.error("[session-manager] dump failed:", e);
+  }
+}
+
 async function humanClick(page: PuppeteerPage, selector: string): Promise<void> {
   const el = await page.$(selector);
   if (!el) throw new Error(`Element not found: ${selector}`);
@@ -278,23 +301,42 @@ export async function loginAndExtractCookies(
     });
 
     try {
-      await page.goto("https://www.avito.ru/#login?authsrc=h", {
+      // На современном Avito hash-роутинг #login отрабатывает только после
+      // mount основного JS. Идём на главную, потом кликаем header/login-button —
+      // открывается модалка с формой. Это устойчивее, чем waitForSelector
+      // сразу после goto на #login.
+      await page.goto("https://www.avito.ru/", {
         waitUntil: "domcontentloaded",
         timeout: NAVIGATION_TIMEOUT_MS,
       });
     } catch (navErr) {
-      // Скриншот для дебага если навигация упала
-      try {
-        await page.screenshot({ path: "/tmp/avito-login-debug.png", fullPage: true });
-        console.error("[session-manager] Screenshot saved to /tmp/avito-login-debug.png");
-      } catch { /* ignore */ }
-      const html = await page.content().catch(() => "");
-      console.error("[session-manager] Page HTML length:", html.length, "URL:", page.url());
+      await dumpDebug(page, "avito-login-nav");
       throw navErr;
     }
 
     // Ждём пока страница полностью отрисуется
-    await randomDelay(2000, 4000);
+    await randomDelay(2500, 5000);
+
+    // Кликаем «Войти» в шапке — открывает модалку логина
+    const headerLoginSelectors = [
+      '[data-marker="header/login-button"]',
+      'a[href*="login"][data-marker]',
+      'button[data-marker*="login"]',
+    ];
+    let openedModal = false;
+    for (const sel of headerLoginSelectors) {
+      const el = await page.$(sel).catch(() => null);
+      if (el) {
+        await humanClick(page, sel).catch(() => el.click().catch(() => {}));
+        openedModal = true;
+        break;
+      }
+    }
+    if (!openedModal) {
+      await dumpDebug(page, "avito-login-no-header-button");
+      throw new Error("Кнопка «Войти» в шапке Авито не найдена (вёрстка изменилась)");
+    }
+    await randomDelay(1500, 3000);
 
     // Вводим логин — расширенные селекторы для разных версий Авито
     const loginSelector = [
@@ -310,7 +352,12 @@ export async function loginAndExtractCookies(
       'input[placeholder*="email"]',
       'input[placeholder*="номер"]',
     ].join(", ");
-    await page.waitForSelector(loginSelector, { timeout: LOGIN_TIMEOUT_MS });
+    try {
+      await page.waitForSelector(loginSelector, { timeout: LOGIN_TIMEOUT_MS });
+    } catch (e) {
+      await dumpDebug(page, "avito-login-selector-timeout");
+      throw e;
+    }
     await humanType(page, loginSelector, login);
 
     await randomDelay(400, 900);
