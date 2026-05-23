@@ -42,22 +42,16 @@ export async function resolveSession(
 
   const supabase = createServiceClient();
 
-  // Проверяем лимит аккаунтов
+  // Standalone-режим: subscription/vibe-проверка снята (один оператор имеет
+  // полный доступ; колонки могут отсутствовать в прод-схеме).
   const { data: user } = await supabase
     .from("users")
-    .select("avito_account_limit, subscription_tier, is_vibe_plus")
+    .select("avito_account_limit")
     .eq("id", userId)
     .single();
 
   if (!user) {
     return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
-  }
-
-  if (user.subscription_tier !== "top_floor_boss" && !user.is_vibe_plus) {
-    return NextResponse.json(
-      { error: "Доступно только для подписки Top Floor Boss" },
-      { status: 403 }
-    );
   }
 
   if (accountIndex > (user.avito_account_limit || 1)) {

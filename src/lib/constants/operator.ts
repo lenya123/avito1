@@ -65,18 +65,14 @@ function safeEqual(a: string, b: string): boolean {
  * Вызывается при логине, чтобы все FK/RLS работали без ручного сидирования БД.
  */
 export function operatorUserRow() {
+  // Минимум колонок, реально существующих в прод-схеме (dimaworksreal/avito-project).
+  // Бизнес-поля подписки/уровня/баланса в прод-схеме удалены — приложение их
+  // читает через `??` фолбэки в mapOperatorUser, так что отсутствие = безопасно.
   return {
     id: OPERATOR_USER_ID,
     role: "client" as const,
     telegram_id: OPERATOR_TELEGRAM_ID,
     name: "Оператор",
-    is_vibe_plus: true,
-    subscription_tier: "top_floor_boss" as const,
-    subscription_start: "2024-01-01",
-    subscription_end: "2099-12-31",
-    level: 3,
-    discount_percent: 10,
     avito_account_limit: OPERATOR_AVITO_ACCOUNT_LIMIT,
-    is_onboarding_completed: true,
   };
 }
