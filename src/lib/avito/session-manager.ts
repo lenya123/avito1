@@ -111,9 +111,10 @@ async function selfTestBridge(localProxyUrl: string): Promise<boolean> {
   });
   console.error(`[selfTest] tcp ${host}:${port} = ${tcpOk}`);
   if (!tcpOk) return false;
-  // 2) Полный CONNECT через curl
+  // 2) Полный CONNECT через curl, лог пишем в файл (systemd journal глотает escape-байты)
   try {
     const { execFile } = await import("child_process");
+    const { writeFile } = await import("fs/promises");
     return await new Promise<boolean>((resolve) => {
       execFile(
         "curl",
@@ -123,10 +124,21 @@ async function selfTestBridge(localProxyUrl: string): Promise<boolean> {
           "https://www.avito.ru/",
         ],
         { maxBuffer: 1024 * 1024 },
-        (err, stdout, stderr) => {
+        async (err, stdout, stderr) => {
           const code = (stdout.match(/HTTP=(\d+)/) || [])[1] || "?";
-          const errBrief = (stderr || "").split("\n").filter(l => l.match(/CONNECT|HTTP\/|< |error:/)).slice(0, 8).join(" | ");
-          console.error(`[selfTest] curl exit=${err?.code ?? 0} code=${code} stderr: ${errBrief}`);
+          const dump = [
+            `--- selfTest at ${new Date().toISOString()} ---`,
+            `bridge: ${localProxyUrl}`,
+            `exit: ${err?.code ?? 0}`,
+            `httpCode: ${code}`,
+            `--- stderr ---`,
+            (stderr || "").replace(/\x1b\[[0-9;]*m/g, ""),
+            `--- stdout ---`,
+            stdout,
+            ``,
+          ].join("\n");
+          await writeFile("/var/log/avito-debug/last-self-test.log", dump).catch(() => {});
+          console.error(`[selfTest] curl exit=${err?.code ?? 0} code=${code} (full → /var/log/avito-debug/last-self-test.log)`);
           resolve(!err && code === "200");
         }
       );
