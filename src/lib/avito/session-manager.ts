@@ -256,6 +256,16 @@ async function detectPostLoginState(
         return "bad_creds";
       }
 
+      // Avito бан/ограничение доступа
+      if (
+        body.includes("доступ закрыт") ||
+        body.includes("доступ ограничен") ||
+        body.includes("аккаунт заблокирован") ||
+        body.includes("временно ограничен")
+      ) {
+        return "blocked";
+      }
+
       // Успешный вход — ищем явные маркеры залогиненного состояния
       const loggedIn =
         document.querySelector('[data-marker="header/profile"]') ||
@@ -273,6 +283,12 @@ async function detectPostLoginState(
     if (state !== "waiting") {
       if (state === "bad_creds") {
         throw new Error("Avito: неверный логин/пароль");
+      }
+      if (state === "blocked") {
+        await dumpDebug(page, "avito-login-blocked");
+        throw new Error(
+          "Avito заблокировал вход (Доступ закрыт). Возможные причины: прокси-IP под подозрением, аккаунт залочен после многих попыток входа, либо требуется ручной вход с этого IP/устройства."
+        );
       }
       return state as "success" | "sms" | "app_confirm" | "captcha";
     }
