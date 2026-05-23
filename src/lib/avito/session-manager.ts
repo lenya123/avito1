@@ -82,26 +82,6 @@ async function ensureStealthRegistered(puppeteer: any): Promise<void> {
 }
 
 /** Парсит user:pass из proxy URL для page.authenticate() */
-function parseProxyAuth(proxyUrl: string): {
-  server: string;
-  username?: string;
-  password?: string;
-} {
-  try {
-    const url = new URL(proxyUrl);
-    const server = `${url.protocol}//${url.host}`;
-    if (url.username) {
-      return {
-        server,
-        username: decodeURIComponent(url.username),
-        password: decodeURIComponent(url.password),
-      };
-    }
-    return { server };
-  } catch {
-    return { server: proxyUrl };
-  }
-}
 
 function randomDelay(min: number, max: number): Promise<void> {
   return new Promise((r) => setTimeout(r, min + Math.random() * (max - min)));
