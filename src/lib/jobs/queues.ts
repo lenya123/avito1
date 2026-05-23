@@ -141,9 +141,13 @@ let automationQueueInstance: Queue | null = null;
 /**
  * Получить очередь автоматизаций
  */
+// Изолируем нашу очередь от шаринг-Redis с основным проектом
+export const BULL_PREFIX = process.env.BULLMQ_PREFIX || "bull-avito-standalone";
+
 export function getAutomationQueue(): Queue {
   if (!automationQueueInstance) {
     automationQueueInstance = new Queue("automation", {
+      prefix: BULL_PREFIX,
       connection: getRedisConnection(),
       defaultJobOptions: {
         attempts: 3,

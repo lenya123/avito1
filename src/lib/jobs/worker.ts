@@ -9,6 +9,7 @@
 
 import { Worker, Job } from "bullmq";
 import { getRedisConnection, closeRedisConnection } from "./connection";
+import { BULL_PREFIX } from "./queues";
 import {
   handleExpireOrder,
   handleDeadlineReminder,
@@ -161,6 +162,7 @@ export function startWorker(): Worker {
   console.log("[Worker] Starting automation worker...");
 
   workerInstance = new Worker("automation", processJob, {
+    prefix: BULL_PREFIX,
     connection: getRedisConnection(),
     concurrency: 5, // Параллельная обработка до 5 задач
     limiter: {
