@@ -207,7 +207,7 @@ async function updateOrdersStats(sessionId: string, userId: string): Promise<voi
     if (d === todayMsk) today.set(id, (today.get(id) ?? 0) + 1);
   }
 
-  for (const [avitoItemId, total] of totals) {
+  for (const [avitoItemId, total] of Array.from(totals.entries())) {
     const todayCount = today.get(avitoItemId) ?? 0;
     await supabase
       .from("avito_items")

@@ -106,7 +106,7 @@ export async function handleSyncAvitoBalance(job: Job): Promise<void> {
           const spent = Math.abs(Number(op.amount_rub) || 0);
           if (spent > 0) byDay.set(day, (byDay.get(day) ?? 0) + spent);
         }
-        for (const [date, amount] of byDay) {
+        for (const [date, amount] of Array.from(byDay.entries())) {
           await loose.from("avito_promotion_daily").upsert(
             {
               user_id: session.user_id,
