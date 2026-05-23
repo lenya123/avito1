@@ -37,6 +37,7 @@
     "jszip": "^3.10.1",
     "next": "14.2.35",
     "openai": "^6.17.0",
+    "proxy-chain": "^2.5.7",
     "puppeteer": "^24.37.5",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",

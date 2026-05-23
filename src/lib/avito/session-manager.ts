@@ -275,13 +275,16 @@ export async function loginAndExtractCookies(
     ...getWebRtcBlockArgs(),
   ];
 
-  let proxyAuth: { username: string; password: string } | null = null;
+  // Прокси через proxy-chain: поднимаем локальный мост (127.0.0.1:rand),
+  // он сам шлёт upstream с auth. Браузеру передаём адрес без креденшалов —
+  // обходит баги page.authenticate в Chromium 124+/puppeteer 24.
+  let localProxyUrl: string | null = null;
+  let proxyChain: typeof import("proxy-chain") | null = null;
   if (proxyUrl) {
-    const parsed = parseProxyAuth(proxyUrl);
-    launchArgs.push(`--proxy-server=${parsed.server}`);
-    if (parsed.username && parsed.password) {
-      proxyAuth = { username: parsed.username, password: parsed.password };
-    }
+    proxyChain = await import("proxy-chain");
+    localProxyUrl = await proxyChain.anonymizeProxy(proxyUrl);
+    launchArgs.push(`--proxy-server=${localProxyUrl}`);
+    console.error(`[session-manager] proxy-chain bridge: ${localProxyUrl} → upstream`);
   }
 
   const browser = await puppeteer.default.launch({
@@ -291,11 +294,6 @@ export async function loginAndExtractCookies(
 
   try {
     const page = await browser.newPage();
-
-    // Прокси-аутентификация (--proxy-server не поддерживает user:pass в URL)
-    if (proxyAuth) {
-      await page.authenticate(proxyAuth);
-    }
 
     await page.setUserAgent(fp.userAgent);
     await page.setViewport(fp.viewport);
@@ -450,6 +448,9 @@ export async function loginAndExtractCookies(
 
     return { cookies, userAgent: fp.userAgent, fingerprint: fp };
   } finally {
-    await browser.close();
+    await browser.close().catch(() => {});
+    if (localProxyUrl && proxyChain) {
+      await proxyChain.closeAnonymizedProxy(localProxyUrl, true).catch(() => {});
+    }
   }
 }

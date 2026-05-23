@@ -184,13 +184,13 @@ export async function openAvitoSessionBrowser(
     ...getWebRtcBlockArgs(),
   ];
 
-  let proxyAuth: { username: string; password: string } | null = null;
+  // Прокси через proxy-chain (обход багов page.authenticate в новых Chromium).
+  let localProxyUrl: string | null = null;
+  let proxyChain: typeof import("proxy-chain") | null = null;
   if (session.proxy_url) {
-    const parsed = parseProxyAuth(session.proxy_url);
-    launchArgs.push(`--proxy-server=${parsed.server}`);
-    if (parsed.username && parsed.password) {
-      proxyAuth = { username: parsed.username, password: parsed.password };
-    }
+    proxyChain = await import("proxy-chain");
+    localProxyUrl = await proxyChain.anonymizeProxy(session.proxy_url);
+    launchArgs.push(`--proxy-server=${localProxyUrl}`);
   }
 
   const browser = await puppeteer.default.launch({
@@ -200,11 +200,13 @@ export async function openAvitoSessionBrowser(
 
   const close = async () => {
     await browser.close().catch(() => {});
+    if (localProxyUrl && proxyChain) {
+      await proxyChain.closeAnonymizedProxy(localProxyUrl, true).catch(() => {});
+    }
   };
 
   try {
     const page = await browser.newPage();
-    if (proxyAuth) await page.authenticate(proxyAuth);
 
     await page.setUserAgent(fp.userAgent);
     await page.setViewport(fp.viewport);
