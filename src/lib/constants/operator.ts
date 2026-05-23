@@ -70,7 +70,7 @@ export function operatorUserRow() {
   // читает через `??` фолбэки в mapOperatorUser, так что отсутствие = безопасно.
   return {
     id: OPERATOR_USER_ID,
-    role: "client" as const,
+    role: "owner" as const,
     telegram_id: OPERATOR_TELEGRAM_ID,
     name: "Оператор",
     avito_account_limit: OPERATOR_AVITO_ACCOUNT_LIMIT,
