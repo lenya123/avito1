@@ -295,23 +295,44 @@ export async function loginAndExtractCookies(
     await page.setUserAgent(fp.userAgent);
     await page.setViewport(fp.viewport);
     await page.emulateTimezone("Europe/Moscow");
-    await injectFingerprint(page, fp);
+    // Временно: возможность отключить injectFingerprint для отладки
+    if (process.env.AVITO_DISABLE_FP !== "1") {
+      await injectFingerprint(page, fp);
+    } else {
+      console.error("[session-manager] injectFingerprint DISABLED via AVITO_DISABLE_FP=1");
+    }
     await page.setExtraHTTPHeaders({
       "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
     });
 
+    console.error(
+      `[session-manager] UA=${fp.userAgent.slice(0, 60)}... viewport=${fp.viewport.width}x${fp.viewport.height}`
+    );
+
+    let gotoResponse;
     try {
-      // На современном Avito hash-роутинг #login отрабатывает только после
-      // mount основного JS. Идём на главную, потом кликаем header/login-button —
-      // открывается модалка с формой. Это устойчивее, чем waitForSelector
-      // сразу после goto на #login.
-      await page.goto("https://www.avito.ru/", {
+      gotoResponse = await page.goto("https://www.avito.ru/", {
         waitUntil: "domcontentloaded",
         timeout: NAVIGATION_TIMEOUT_MS,
       });
     } catch (navErr) {
       await dumpDebug(page, "avito-login-nav");
       throw navErr;
+    }
+
+    // Verbose: что реально загрузилось
+    const navUrl = page.url();
+    const navTitle = await page.title().catch(() => "?");
+    const navLen = (await page.content().catch(() => "")).length;
+    console.error(
+      `[session-manager] goto OK: status=${gotoResponse?.status() ?? "?"} url=${navUrl} title="${navTitle}" htmlLen=${navLen}`
+    );
+    if (navLen < 50000 || !navUrl.includes("avito.ru")) {
+      // что-то совсем не то загрузилось — дампим сразу
+      await dumpDebug(page, "avito-login-bad-page");
+      throw new Error(
+        `Avito не загрузился (htmlLen=${navLen}, url=${navUrl}, title="${navTitle}")`
+      );
     }
 
     // Ждём пока страница полностью отрисуется
