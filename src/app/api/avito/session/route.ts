@@ -30,15 +30,15 @@ export async function POST(request: NextRequest) {
     const { login, password, accountIndex = 1 } = parsed.data;
     const supabase = createServiceClient();
 
-    // Проверяем подписку и лимит аккаунтов
+    // Standalone: subscription/vibe-гейт снят. Только лимит аккаунтов.
     const { data: user } = await supabase
       .from("users")
-      .select("subscription_tier, is_vibe_plus, avito_account_limit")
+      .select("avito_account_limit")
       .eq("id", userId)
       .single();
 
-    if (!user || (user.subscription_tier !== "top_floor_boss" && !user.is_vibe_plus)) {
-      return NextResponse.json({ error: "Доступно только для Top Floor Boss" }, { status: 403 });
+    if (!user) {
+      return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
     }
 
     if (accountIndex > (user.avito_account_limit || 1)) {
