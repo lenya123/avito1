@@ -60,6 +60,7 @@ export async function uniqueizeImage(
         width: cropW,
         height: cropH,
         channels: 3,
+        background: { r: 0, g: 0, b: 0 },
         noise: { type: "gaussian", mean: 0, sigma: rnd(2, 5) },
       },
     })
