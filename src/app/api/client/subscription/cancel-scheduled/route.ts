@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const sessionToken = Buffer.from(JSON.stringify(updatedSession)).toString("base64");
     response.cookies.set("session", sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: process.env.COOKIE_SECURE === "true",
       sameSite: "strict",
       maxAge: 30 * 24 * 60 * 60,
       path: "/",

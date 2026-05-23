@@ -6,7 +6,7 @@ export async function POST() {
   // Удаляем cookie сессии
   response.cookies.set("session", "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "strict",
     maxAge: 0,
     path: "/",
