@@ -43,7 +43,10 @@ export async function transcribeVoice(voiceUrl: string): Promise<string> {
   const dl = await fetchBuffer(voiceUrl);
   if (!dl) return "[голосовое сообщение: не удалось скачать]";
   try {
-    const file = new File([dl.buf], "voice.ogg", { type: dl.mime || "audio/ogg" });
+    // Buffer → Uint8Array: устраняет несовместимость BlobPart в Node 22+
+    const file = new File([new Uint8Array(dl.buf)], "voice.ogg", {
+      type: dl.mime || "audio/ogg",
+    });
     const r = await openai().audio.transcriptions.create({
       file,
       model: OPENAI_STT_MODEL,
