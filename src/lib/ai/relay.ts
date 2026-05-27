@@ -19,7 +19,7 @@ import {
 
 let _openai: OpenAI | null = null;
 function openai(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || undefined });
   return _openai;
 }
 

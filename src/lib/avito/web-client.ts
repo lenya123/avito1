@@ -180,6 +180,116 @@ export async function fetchAvitoOrders(
 }
 
 // =============================================================================
+// Order details (детали конкретного заказа: адрес почты, QR/barcode, код)
+// =============================================================================
+
+export interface AvitoOrderDeliveryDetails {
+  /** Куда нести (адрес пункта/почты) */
+  pickupAddress: string | null;
+  /** Режим работы */
+  pickupSchedule: string | null;
+  /** Номер отправления / трек (parcelID) */
+  parcelId: string | null;
+  /** Отформатированный номер "805 103 212 74715" */
+  parcelIdFormatted: string | null;
+  /** КОД ПОДТВЕРЖДЕНИЯ — короткий (4 цифры), который называют в отделении.
+   * Обновляется Avito раз в сутки. Получается отдельным запросом. */
+  confirmCode: string | null;
+  /** URL картинки barcode/QR (Avito generate endpoint) */
+  barcodeUrl: string | null;
+  /** "code128" или "qr" */
+  barcodeType: string | null;
+  /** Есть ли barcode (false для Почты России — только код) */
+  isBarcodeAvailable: boolean;
+  /** Раздел detail: "return" (возврат) | "dispatch" (отправка) | "receive" */
+  flow: "return" | "dispatch" | "receive" | "unknown";
+  /** Срок до которого надо забрать/отнести */
+  deadline: string | null;
+  /** Внутренний shipmentId (для refresh confirmCode) */
+  shipmentId: string | null;
+}
+
+/**
+ * Получить детали заказа: адрес пункта выдачи/почты, код для предъявления,
+ * URL barcode/QR. Avito возвращает server-driven-UI с глубокой вложенностью —
+ * парсим только нужные поля.
+ */
+export async function fetchAvitoOrderDetails(
+  session: BrowserSession,
+  orderId: string
+): Promise<AvitoOrderDeliveryDetails | null> {
+  const url = `/web/2/profile/order?referenceID=${encodeURIComponent(orderId)}&templateVersion=0&srcp=orders_list&location=Europe/Moscow`;
+  const response = await avitoWebFetch(url, session, {
+    referer: `https://www.avito.ru/orders/${orderId}?source=orders_list`,
+  });
+  if (!response.ok) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any = await response.json().catch(() => null);
+  if (!data) return null;
+
+  // Avito server-driven UI: result.content.main.rootComponent._sources.{N}.{returnDeliveryInfo|dispatchDeliveryInfo|...}
+  const sources = data?.result?.content?.main?.rootComponent?._sources;
+  if (!sources || typeof sources !== "object") return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let infoObj: any = null;
+  let flow: AvitoOrderDeliveryDetails["flow"] = "unknown";
+  for (const src of Object.values(sources)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s = src as any;
+    if (s?.returnDeliveryInfo) { infoObj = s.returnDeliveryInfo; flow = "return"; break; }
+    if (s?.dispatchDeliveryInfo) { infoObj = s.dispatchDeliveryInfo; flow = "dispatch"; break; }
+    if (s?.receiveDeliveryInfo) { infoObj = s.receiveDeliveryInfo; flow = "receive"; break; }
+  }
+  if (!infoObj) return null;
+
+  const terminal = infoObj.terminal ?? {};
+  const barcode = infoObj.receiveBarcode ?? infoObj.dispatchBarcode ?? infoObj.barcode ?? {};
+  const dispatchNum = infoObj.sellerDispatchNumber ?? infoObj.dispatchNumber ?? {};
+
+  // shipmentId извлекаем из terminal.deeplink (внутренний id для отдельных API)
+  let shipmentId: string | null = null;
+  try {
+    const dl = terminal?.deeplink ?? "";
+    const m = dl.match(/shipmentId%22%3A%22(\d+)%22/) || dl.match(/"shipmentId":"(\d+)"/);
+    if (m) shipmentId = m[1];
+  } catch {/* ignore */}
+
+  // Если есть shipmentId — догружаем КОД ПОДТВЕРЖДЕНИЯ через отдельный endpoint.
+  // Avito возвращает 4-значный код в success.main.params["&code"].
+  let confirmCode: string | null = null;
+  if (shipmentId && infoObj.isConfirmCodeEnabled) {
+    try {
+      const codeRes = await avitoWebFetch(
+        `/api/1/logistics/shipment/confirmationCode/show?shipmentId=${shipmentId}`,
+        session,
+        { referer: `https://www.avito.ru/orders/${orderId}` }
+      );
+      if (codeRes.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const codeData: any = await codeRes.json().catch(() => null);
+        const c = codeData?.success?.main?.params?.["&code"] ?? codeData?.code ?? null;
+        if (c) confirmCode = String(c);
+      }
+    } catch {/* ignore */}
+  }
+
+  return {
+    pickupAddress: terminal.address ?? null,
+    pickupSchedule: terminal.schedule ?? null,
+    parcelId: dispatchNum.original ?? infoObj.parcelID ?? null,
+    parcelIdFormatted: dispatchNum.formatted ?? dispatchNum.original ?? infoObj.parcelID ?? null,
+    confirmCode,
+    barcodeUrl: barcode?.url?.size1280x3202 ?? barcode?.url?.default ?? barcode?.url ?? null,
+    barcodeType: barcode?.type ?? null,
+    isBarcodeAvailable: Boolean(infoObj.isBarcodeAvailable),
+    flow,
+    deadline: infoObj.destroyDate ?? infoObj.deliveryDate ?? null,
+    shipmentId,
+  };
+}
+
+// =============================================================================
 // Items (объявления пользователя)
 // =============================================================================
 

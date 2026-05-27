@@ -45,9 +45,12 @@ export default function CreateListingPage() {
   const jobs = jobsData?.jobs ?? [];
 
   const handleGenTitle = async () => {
-    if (!productId) return toast.error("Сначала выберите товар");
+    const name = title.trim();
+    if (!productId && !name) return toast.error("Выберите товар или введите название для контекста");
     try {
-      const r = await genText.mutateAsync({ productId, kind: "title" });
+      const r = await genText.mutateAsync(
+        productId ? { productId, kind: "title" } : { name, kind: "title" }
+      );
       if (r.title) setTitle(r.title);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ошибка");
@@ -55,9 +58,12 @@ export default function CreateListingPage() {
   };
 
   const handleGenDesc = async () => {
-    if (!productId) return toast.error("Сначала выберите товар");
+    const name = title.trim();
+    if (!productId && !name) return toast.error("Выберите товар или введите название");
     try {
-      const r = await genText.mutateAsync({ productId, kind: "description" });
+      const r = await genText.mutateAsync(
+        productId ? { productId, kind: "description" } : { name, kind: "description" }
+      );
       if (r.description) setDescription(r.description);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ошибка");
@@ -111,6 +117,7 @@ export default function CreateListingPage() {
                   key={p.id}
                   onClick={() => {
                     setProductId(p.id);
+                    if (!title) setTitle(p.name);
                     if (!price) setPrice(String(Math.round(p.drop_price)));
                   }}
                   className={cn(

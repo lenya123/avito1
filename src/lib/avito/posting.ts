@@ -17,6 +17,7 @@ import {
   randomDelay,
   dumpPageDebug,
 } from "./browser";
+import { pickCategoryStep } from "@/lib/ai/category-picker";
 
 const NAV_TIMEOUT = 60_000;
 
@@ -80,8 +81,85 @@ export async function postListing(
     });
     await randomDelay(2500, 4500);
 
-    // STUB: verify selectors against live Avito
-    // 1. Название (на первом шаге Avito подбирает категорию по названию)
+    // ─── Шаг 1: пройти category-wizard ───
+    // Avito показывает многошаговый wizard выбора категории; поле title появляется
+    // только в самом конце. На каждом шаге читаем тексты доступных кнопок,
+    // GPT выбирает самую релевантную для нашего товара, кликаем — повторяем
+    // пока не появится title-input или не упрёмся в максимум 6 шагов.
+    let titleAppeared = false;
+    for (let step = 1; step <= 6; step++) {
+      // Сначала проверим — может title уже появился
+      const hasTitleInput = await page.evaluate(() => {
+        return !!document.querySelector(
+          'input[data-marker="title/input"], input[name="title"], input[id="title"], input[placeholder*="азвание"]'
+        );
+      });
+      if (hasTitleInput) {
+        titleAppeared = true;
+        break;
+      }
+
+      // Читаем список доступных кнопок wizard
+      const options = await page.evaluate(() => {
+        const btns = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-marker="category-wizard/button"]')
+        );
+        return btns
+          .map((b) => (b.innerText || b.textContent || "").replace(/ /g, " ").trim())
+          .filter((t) => t.length > 0);
+      });
+      if (options.length === 0) {
+        // Wizard закончился без title — возможно форма открылась как иначе
+        console.error(`[posting] wizard step ${step}: no buttons, ломаемся`);
+        break;
+      }
+
+      console.error(`[posting] wizard step ${step}: options=${JSON.stringify(options)}`);
+      const picked = await pickCategoryStep(input.title, input.description, options).catch(
+        () => null
+      );
+      if (!picked) {
+        await dumpPageDebug(page, `post-listing-wizard-step-${step}`);
+        return fail(`AI не смог выбрать категорию на шаге ${step}`);
+      }
+      console.error(`[posting] wizard step ${step}: picked="${picked}"`);
+
+      // Кликаем по кнопке с этим текстом
+      const clicked = await page.evaluate((target: string) => {
+        const norm = (s: string) => s.replace(/ /g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+        const t = norm(target);
+        const btns = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-marker="category-wizard/button"]')
+        );
+        for (const b of btns) {
+          const text = norm(b.innerText || b.textContent || "");
+          if (text === t || text.includes(t) || t.includes(text)) {
+            b.click();
+            return true;
+          }
+        }
+        return false;
+      }, picked);
+      if (!clicked) {
+        await dumpPageDebug(page, `post-listing-wizard-click-${step}`);
+        return fail(`Не удалось кликнуть категорию "${picked}" (шаг ${step})`);
+      }
+      await randomDelay(1500, 2800);
+    }
+    if (!titleAppeared) {
+      // Дополнительная проверка — может появилось после последнего клика
+      const hasTitleInput = await page.evaluate(() => {
+        return !!document.querySelector(
+          'input[data-marker="title/input"], input[name="title"], input[id="title"], input[placeholder*="азвание"]'
+        );
+      });
+      if (!hasTitleInput) {
+        await dumpPageDebug(page, "post-listing-no-title-after-wizard");
+        return fail("Поле названия не появилось после прохождения wizard");
+      }
+    }
+
+    // ─── Шаг 2: Название ───
     const titleOk = await fillByCandidates(
       page,
       [
@@ -97,15 +175,6 @@ export async function postListing(
       return fail("Поле названия не найдено (форма Avito изменилась)");
     }
     await randomDelay(1500, 3000);
-
-    // STUB: выбор категории/параметров — зависит от товара.
-    // На реальном кабинете здесь шаги выбора категории и обязательных
-    // атрибутов. Пока пытаемся продолжить «как есть».
-    await clickFirst(page, [
-      '[data-marker="search-category/0"]',
-      'button[data-marker="category-suggest/select"]',
-    ]).catch(() => false);
-    await randomDelay(1000, 2000);
 
     // 2. Описание
     await fillByCandidates(
@@ -167,25 +236,50 @@ export async function postListing(
       await randomDelay(4000, 8000);
     }
 
-    // 6. Отправка формы
-    // STUB: verify selectors against live Avito
-    const submitted = await clickFirst(page, [
+    // 6. Multi-step submit: Avito теперь делает форму многошаговой —
+    // кнопка "Далее" [item-edit/button-next] переключает шаги, на финале —
+    // "Опубликовать"/"Разместить"/"Подать объявление". Кликаем до 8 раз пока
+    // не редирект на страницу объявления или не появится явная финальная кнопка.
+    const SUBMIT_SELECTORS = [
       '[data-marker="submit-button/button"]',
       'button[data-marker="submit/button"]',
+      '[data-marker="submit-form/submit"]',
+      '[data-marker="item-edit/button-publish"]',
+      '[data-marker="item-edit/button-next"]',
       'button[type="submit"]',
-    ]);
-    if (!submitted) {
-      await dumpPageDebug(page, "post-listing-submit");
-      return fail("Кнопка публикации не найдена");
+    ];
+    let anyClicked = false;
+    let publishedUrl: string | null = null;
+    for (let step = 1; step <= 8; step++) {
+      const beforeUrl = page.url();
+      const clicked = await clickFirst(page, SUBMIT_SELECTORS);
+      if (!clicked) {
+        if (!anyClicked) {
+          await dumpPageDebug(page, "post-listing-submit");
+          return fail("Кнопка публикации не найдена");
+        }
+        // если хоть раз кликнули раньше — возможно уже на финале без кнопки
+        break;
+      }
+      anyClicked = true;
+      console.error(`[posting] submit step ${step}: clicked`);
+      // Ждём либо navigation либо новый шаг (изменение DOM)
+      const navHappened = await page
+        .waitForNavigation({ waitUntil: "domcontentloaded", timeout: 8000 })
+        .then(() => true)
+        .catch(() => false);
+      await randomDelay(1500, 3000);
+      const afterUrl = page.url();
+      console.error(`[posting] submit step ${step}: nav=${navHappened} url=${afterUrl}`);
+      // Если редиректнуло на страницу опубликованного объявления — стоп
+      if (afterUrl !== beforeUrl && !afterUrl.includes("/additem")) {
+        publishedUrl = afterUrl;
+        break;
+      }
     }
-
-    // 7. Ждём редирект на страницу объявления / кабинет
-    await page
-      .waitForNavigation({ waitUntil: "networkidle2", timeout: NAV_TIMEOUT })
-      .catch(() => {});
     await randomDelay(2000, 4000);
 
-    const url: string = page.url();
+    const url: string = publishedUrl ?? page.url();
     // Avito URL объявления заканчивается на _<id>
     const m = url.match(/_(\d{6,})(?:\?|$)/);
     if (m) {

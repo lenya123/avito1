@@ -29,20 +29,20 @@ export async function POST(request: NextRequest) {
     let p: ListingProductInput | null = null;
     if (parsed.data.productId) {
       const supabase = createServiceClient();
+      // brand/measurements колонок нет в schema standalone-форка
       const { data: product } = await supabase
         .from("products")
-        .select("name, description, brand, category, drop_price, measurements")
+        .select("name, description, category, drop_price")
         .eq("id", parsed.data.productId)
         .maybeSingle();
       if (product) {
         p = {
           name: product.name,
           description: product.description,
-          brand: product.brand,
+          brand: null,
           category: product.category,
           price: product.drop_price,
-          measurements:
-            (product.measurements as Record<string, Record<string, number>> | null) ?? null,
+          measurements: null,
         };
       }
     }

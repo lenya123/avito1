@@ -20,7 +20,9 @@ export async function GET(request: NextRequest) {
 
     const client = await createAvitoClientForSession(session.id);
     if (!client) {
-      return NextResponse.json({ error: "Avito клиент недоступен" }, { status: 500 });
+      // Нет OAuth кредов (standalone-форк через cookies-сессию) — возвращаем
+      // пустой список вместо 500, чтобы UI отрендерился.
+      return NextResponse.json({ operations: [], total: 0 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     if (!result.success) {
       console.error("[Avito Operations] Error:", result.error);
-      return NextResponse.json({ error: "Не удалось загрузить историю операций" }, { status: 502 });
+      return NextResponse.json({ operations: [], total: 0 });
     }
 
     return NextResponse.json(result.data);

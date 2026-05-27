@@ -27,6 +27,7 @@ type AnyBrowser = any;
 let stealthRegistered = false;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function ensureStealthRegistered(puppeteer: any): Promise<void> {
+  if (process.env.AVITO_DISABLE_STEALTH === "1") return;
   if (stealthRegistered) return;
   const StealthPlugin = await import("puppeteer-extra-plugin-stealth");
   const stealth = StealthPlugin.default();
@@ -191,9 +192,23 @@ export async function openAvitoSessionBrowser(
     await page.setUserAgent(fp.userAgent);
     await page.setViewport(fp.viewport);
     await page.emulateTimezone("Europe/Moscow");
-    await injectFingerprint(page, fp);
+    // AVITO_DISABLE_FP=1 — отключает injectFingerprint (как у login).
+    // Avito пропускает залогиненных юзеров по cookies, FP-инъекции часто
+    // ломают рендеринг (degraded SPA на /additem и т.п.).
+    if (process.env.AVITO_DISABLE_FP !== "1") {
+      await injectFingerprint(page, fp);
+    }
     await page.setExtraHTTPHeaders({
       "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    });
+
+    // Полифилл tsx/esbuild __name helper — иначе inline arrow-функции из
+    // page.evaluate() падают с "__name is not defined" (esbuild keepNames
+    // inject ссылается на global helper, отсутствующий в browser context).
+    await page.evaluateOnNewDocument(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const g = globalThis as any;
+      if (typeof g.__name === "undefined") g.__name = (fn: unknown) => fn;
     });
 
     // Восстанавливаем cookies — мы уже залогинены

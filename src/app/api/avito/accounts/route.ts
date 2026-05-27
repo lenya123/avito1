@@ -15,10 +15,11 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServiceClient();
 
-    // Получаем лимит и подписку
+    // Получаем лимит. subscription_tier/is_vibe_plus отсутствуют в standalone-форке,
+    // поэтому запрашиваем только то что реально есть в схеме.
     const { data: user } = await supabase
       .from("users")
-      .select("avito_account_limit, subscription_tier, is_vibe_plus")
+      .select("avito_account_limit")
       .eq("id", userId)
       .single();
 
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       accounts,
       limit: user.avito_account_limit ?? 0,
-      subscriptionTier: user.subscription_tier,
+      subscriptionTier: null,
     });
   } catch (error) {
     console.error("[avito/accounts GET] Error:", error);

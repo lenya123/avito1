@@ -18,6 +18,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL || undefined,
 });
 
 // Supabase service client для запросов к БД

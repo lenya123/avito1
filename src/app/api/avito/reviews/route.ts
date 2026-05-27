@@ -26,7 +26,12 @@ export async function GET(request: NextRequest) {
 
     const client = await createAvitoClientForSession(session.id);
     if (!client) {
-      return NextResponse.json({ error: "Avito клиент недоступен" }, { status: 500 });
+      // Нет OAuth (standalone через cookies) — пустой ответ вместо 500
+      return NextResponse.json({
+        rating: null,
+        reviews: null,
+        errors: { rating: null, reviews: null },
+      });
     }
 
     const { searchParams } = new URL(request.url);

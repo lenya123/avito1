@@ -776,7 +776,9 @@ export async function scheduleAvitoLogin(userId: string, accountIndex: number = 
     // Игнорируем
   }
 
-  await queue.add("avito-login", { userId, accountIndex }, { jobId });
+  // attempts:1 — обработка через ротацию прокси внутри handler.
+  // BullMQ-retries сжигают прокси х3 на каждом провале и без пользы.
+  await queue.add("avito-login", { userId, accountIndex }, { jobId, attempts: 1 });
 
   console.log(`[Jobs] Scheduled avito-login for userId: ${userId}`);
 }
@@ -859,12 +861,21 @@ export async function rescheduleAvitoOrdersSync(): Promise<void> {
 export async function scheduleAvitoReloginCheck(): Promise<void> {
   const queue = getAutomationQueue();
 
-  // Удалить старые repeatable jobs
+  // Удалить старые repeatable jobs (в т.ч. если флаг включили после)
   const repeatableJobs = await queue.getRepeatableJobs();
   for (const job of repeatableJobs) {
     if (job.name === "avito-relogin-check") {
       await queue.removeRepeatableByKey(job.key);
     }
+  }
+
+  // AVITO_DISABLE_RELOGIN=1 — отключает периодический relogin-check.
+  // Полезно когда datacenter-IPv4 прокси выгорают за 1-2 login → каждые 10 мин
+  // jobs сжигают доверие IP и блокируют SMS rate-limit. Включай когда есть
+  // мобильный прокси или починена ротация.
+  if (process.env.AVITO_DISABLE_RELOGIN === "1") {
+    console.log("[Jobs] avito-relogin-check DISABLED via AVITO_DISABLE_RELOGIN=1");
+    return;
   }
 
   await queue.add(

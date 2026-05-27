@@ -13,7 +13,7 @@
 
 import type { Job } from "bullmq";
 import { createServiceClient, createServiceClientLoose } from "@/lib/supabase/server";
-import { fetchAvitoOrders, SessionExpiredError } from "@/lib/avito/web-client";
+import { fetchAvitoOrders, fetchAvitoOrderDetails, SessionExpiredError } from "@/lib/avito/web-client";
 import { linkOrderToItem, extractReturnCode } from "@/lib/avito/order-enrich";
 import { scheduleAvitoLogin, rescheduleAvitoOrdersSync } from "../queues";
 import type { SyncAvitoOrdersJobData } from "../queues";
@@ -97,10 +97,26 @@ export async function handleSyncAvitoOrders(job: Job<SyncAvitoOrdersJobData>): P
           title: string | null;
         }>;
 
+        // Для заказов требующих действия (отправить / забрать возврат) —
+        // догружаем детали (адрес почты, код, barcode). Avito возвращает их
+        // через /web/2/profile/order, мы парсим в delivery_details.
+        const detailsMap = new Map<string, Awaited<ReturnType<typeof fetchAvitoOrderDetails>>>();
+        const actionOrders = orders.filter((o) => o.status.requiredAction);
+        for (const o of actionOrders) {
+          try {
+            const d = await fetchAvitoOrderDetails({ cookies, userAgent, proxyUrl, platform }, o.orderId);
+            if (d) detailsMap.set(o.orderId, d);
+            await humanDelay(800, 2000);
+          } catch (e) {
+            console.warn(`[sync-avito-orders] details fetch failed for ${o.orderId}:`, (e as Error)?.message);
+          }
+        }
+
         // Upsert заказов в БД — с session_id + обогащение по ТЗ
         const rows = orders.map((o) => {
           const itemTitle = o.imgSet[0]?.alt ?? null;
           const avitoItemId = linkOrderToItem(itemTitle, itemsList);
+          const details = detailsMap.get(o.orderId) ?? null;
           return {
             user_id: session.user_id,
             session_id: session.id,
@@ -122,6 +138,7 @@ export async function handleSyncAvitoOrders(job: Job<SyncAvitoOrdersJobData>): P
             created_at_avito: o.createdAt || null,
             updated_at_avito: o.updatedAt || null,
             synced_at: new Date().toISOString(),
+            delivery_details: details, // адрес почты, код, barcode для активных
           };
         });
 

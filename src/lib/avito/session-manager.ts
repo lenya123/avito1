@@ -236,8 +236,11 @@ async function detectPostLoginState(
         return "sms";
       }
 
-      // Экран подтверждения через приложение
+      // Экран подтверждения через приложение / "Сработала защита профиля"
       if (
+        document.querySelector('[data-marker^="auth-app/"]') ||
+        document.querySelector('[data-marker="password-was-reset-form/title"]') ||
+        body.includes("сработала защита профиля") ||
         body.includes("подтвердите вход") ||
         body.includes("в приложении") ||
         body.includes("push-уведомление") ||
@@ -282,6 +285,7 @@ async function detectPostLoginState(
 
     if (state !== "waiting") {
       if (state === "bad_creds") {
+        await dumpDebug(page, "avito-login-bad-creds");
         throw new Error("Avito: неверный логин/пароль");
       }
       if (state === "blocked") {
@@ -290,6 +294,8 @@ async function detectPostLoginState(
           "Avito заблокировал вход (Доступ закрыт). Возможные причины: прокси-IP под подозрением, аккаунт залочен после многих попыток входа, либо требуется ручной вход с этого IP/устройства."
         );
       }
+      // Дампим страницу при sms/app_confirm/captcha — для диагностики что Avito реально показал
+      await dumpDebug(page, `avito-login-state-${state}`);
       return state as "success" | "sms" | "app_confirm" | "captcha";
     }
 
@@ -377,8 +383,14 @@ export async function loginAndExtractCookies(
     );
   }
 
+  // AVITO_HEADED=1 + DISPLAY=:99 (Xvfb) → реальный browser window, обходит
+  // часть headless-детекций Avito. По умолчанию headless: true.
+  const useHeaded = process.env.AVITO_HEADED === "1";
+  if (useHeaded) {
+    console.error(`[session-manager] headed mode (DISPLAY=${process.env.DISPLAY ?? "?"})`);
+  }
   const browser = await puppeteer.default.launch({
-    headless: true,
+    headless: useHeaded ? false : true,
     args: launchArgs,
   });
 
@@ -388,6 +400,15 @@ export async function loginAndExtractCookies(
     await page.setUserAgent(fp.userAgent);
     await page.setViewport(fp.viewport);
     await page.emulateTimezone("Europe/Moscow");
+
+    // Полифилл __name (tsx/esbuild helper) — иначе arrow-функции
+    // в page.evaluate() падают с "__name is not defined".
+    await page.evaluateOnNewDocument(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const g = globalThis as any;
+      if (typeof g.__name === "undefined") g.__name = (fn: unknown) => fn;
+    });
+
     // Временно: возможность отключить injectFingerprint для отладки
     if (process.env.AVITO_DISABLE_FP !== "1") {
       await injectFingerprint(page, fp);
@@ -402,8 +423,14 @@ export async function loginAndExtractCookies(
       `[session-manager] UA=${fp.userAgent.slice(0, 60)}... viewport=${fp.viewport.width}x${fp.viewport.height}`
     );
 
+    // Сначала прогреваем сессию визитом на главную (cookies, fingerprint в JS),
+    // потом сразу идём на полноценную страницу логина — это надёжнее модалки,
+    // которая иногда не загружается в облегчённом варианте главной.
     let gotoResponse;
     try {
+      // domcontentloaded — networkidle2 на Avito не срабатывает (бесконечная
+      // активность от analytics/ads). После goto делаем явный randomDelay
+      // ниже чтобы SPA успело загрузить login-роутер.
       gotoResponse = await page.goto("https://www.avito.ru/", {
         waitUntil: "domcontentloaded",
         timeout: NAVIGATION_TIMEOUT_MS,
@@ -428,40 +455,131 @@ export async function loginAndExtractCookies(
       );
     }
 
+    // Ранняя проверка soft-bana по IP: Avito возвращает 200 + контент,
+    // но с баннером "Доступ ограничен: проблема с IP" и без интерактивных
+    // частей (нет login-form). Падаем сразу с понятной ошибкой.
+    const ipBlocked = await page.evaluate(() => {
+      const t = document.body?.innerText ?? "";
+      return /Доступ ограничен[:\s]*проблема с IP/i.test(t) ||
+        /проблема с IP/i.test(t);
+    });
+    if (ipBlocked) {
+      await dumpDebug(page, "avito-login-ip-blocked");
+      throw new Error(
+        "Avito заблокировал IP прокси («Доступ ограничен: проблема с IP»). Нужно сменить прокси (желательно мобильный)."
+      );
+    }
+
     // Ждём пока страница полностью отрисуется
     await randomDelay(2500, 5000);
 
-    // Кликаем «Войти» в шапке — открывает модалку логина.
-    // ВАЖНО: humanClick (mouse coords) у stealth-сборки иногда не триггерит
-    // React event handlers Avito, поэтому используем JS-клик как первичный.
+    // ВАЖНО: /profile/login возвращает 403 для Puppeteer (anti-bot шит включён).
+    // Остаёмся на главной, открываем модалку через hash-trigger.
+    // Avito рандомно отдаёт degraded SPA без login-роутера → retry до 4 раз
+    // с переоткрытием page (новый visit главной).
     const headerLoginSelectors = [
       '[data-marker="header/login-button"]',
       'a[href*="login"][data-marker]',
       'button[data-marker*="login"]',
     ];
-    let openedModal = false;
-    for (const sel of headerLoginSelectors) {
-      const exists = await page.$(sel).catch(() => null);
-      if (exists) {
-        // JS-клик надёжнее обходит stealth-проблемы с координатами
-        await page
-          .evaluate((s: string) => {
-            const el = document.querySelector(s) as HTMLElement | null;
-            if (el) el.click();
-          }, sel)
-          .catch(() => {});
-        // подкрепляем человеческим кликом для надёжности
-        await humanClick(page, sel).catch(() => {});
-        openedModal = true;
-        break;
+
+    const tryOpenLoginModal = async (p: PuppeteerPage): Promise<boolean> => {
+      const dismissed = await p.evaluate(() => {
+        const results: string[] = [];
+        const cookieBtn = document.querySelector('[data-marker^="cookie-consent/button"]') as HTMLElement | null;
+        if (cookieBtn) { cookieBtn.click(); results.push("cookie-consent"); }
+        const locLeave = document.querySelector('[data-marker="location/tooltip-leave-as-is"]') as HTMLElement | null;
+        if (locLeave) { locLeave.click(); results.push("location-tooltip"); }
+        const dialogClose = document.querySelector('[role="dialog"] [aria-label*="закры" i], [role="dialog"] [aria-label*="close" i]') as HTMLElement | null;
+        if (dialogClose) { dialogClose.click(); results.push("dialog-close"); }
+        return results;
+      });
+      if (dismissed.length > 0) {
+        console.error(`[session-manager] dismissed popups: ${dismissed.join(", ")}`);
+        await randomDelay(500, 1000);
       }
+
+      const buttonExists = await p.evaluate((sels: string[]) => {
+        for (const s of sels) if (document.querySelector(s)) return true;
+        return false;
+      }, headerLoginSelectors);
+      if (!buttonExists) return false;
+
+      // 1) history.pushState + popstate (Avito-роутер слушает popstate, а
+      //    обычный hashchange может игнорироваться React-роутером).
+      await p.evaluate((sels: string[]) => {
+        let targetHash = "login?authsrc=h";
+        for (const s of sels) {
+          const el = document.querySelector(s) as HTMLAnchorElement | null;
+          if (el && el.getAttribute("href")?.startsWith("#")) {
+            targetHash = el.getAttribute("href")!.slice(1);
+            break;
+          }
+        }
+        try {
+          history.pushState(null, "", "#" + targetHash);
+          window.dispatchEvent(new PopStateEvent("popstate"));
+          window.dispatchEvent(new HashChangeEvent("hashchange"));
+        } catch {
+          window.location.hash = targetHash;
+        }
+      }, headerLoginSelectors).catch(() => {});
+      // 2) dispatchEvent + click через JS
+      await p.evaluate((sels: string[]) => {
+        for (const s of sels) {
+          const el = document.querySelector(s) as HTMLElement | null;
+          if (el) {
+            el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+            el.click();
+            break;
+          }
+        }
+      }, headerLoginSelectors).catch(() => {});
+      // 3) scrollIntoView + реальный mouse-клик (CDP-уровень)
+      for (const sel of headerLoginSelectors) {
+        const el = await p.$(sel).catch(() => null);
+        if (el) {
+          await p.evaluate((s: string) => {
+            const elm = document.querySelector(s) as HTMLElement | null;
+            elm?.scrollIntoView({ block: "center", inline: "center" });
+          }, sel).catch(() => {});
+          await randomDelay(200, 500);
+          await humanClick(p, sel).catch(() => {});
+          break;
+        }
+      }
+      // ждём модалку — поллинг до 15с (Avito SPA медленный)
+      try {
+        await p.waitForFunction(
+          () => !!document.querySelector('[data-marker^="login-form/"], [data-marker^="login/"], [data-marker^="auth-app"]'),
+          { timeout: 15000 }
+        );
+      } catch {
+        // не дождались
+      }
+
+      const state = await p.evaluate(() => ({
+        hash: window.location.hash,
+        inputCount: document.querySelectorAll("input").length,
+        hasLoginForm: !!document.querySelector('[data-marker^="login-form/"], [data-marker^="login/"], form[action*="login"], [class*="login-form"]'),
+      }));
+      console.error(
+        `[session-manager] post-modal-trigger: hash=${state.hash} inputs=${state.inputCount} hasLoginForm=${state.hasLoginForm}`
+      );
+      return state.hasLoginForm;
+    };
+
+    // Одна попытка открыть модалку. Ретраи в одной сессии делают только хуже —
+    // Avito прогрессирующе банит при повторных goto, выдаёт degraded SPA или 403.
+    // Если не сработало — выходим с понятной ошибкой, пусть прокси отдохнёт 5-10 мин.
+    const opened = await tryOpenLoginModal(page);
+    if (!opened) {
+      await dumpDebug(page, "avito-login-modal-failed");
+      throw new Error(
+        "Не удалось открыть модалку логина: Avito отдаёт degraded SPA без login-роутера. Подождите 5-10 минут и попробуйте снова, либо смените прокси."
+      );
     }
-    if (!openedModal) {
-      await dumpDebug(page, "avito-login-no-header-button");
-      throw new Error("Кнопка «Войти» в шапке Авито не найдена (вёрстка изменилась)");
-    }
-    // даём модалке время прорисоваться (React + анимации)
-    await randomDelay(3000, 5000);
+    await randomDelay(500, 1200);
 
     // Вводим логин — расширенные селекторы для разных версий Авито
     const loginSelector = [
@@ -514,31 +632,140 @@ export async function loginAndExtractCookies(
       throw new CaptchaRequiredError();
     }
 
+    // Гибридный flow для app_confirm + sms:
+    // Avito может показать одновременно push-prompt (auth-app/popup) И опцию SMS.
+    // Не заставляем оператора выбирать заранее — запускаем ОБА waiters параллельно:
+    //   • pushWaiter: polls страницу до success (оператор нажимает push в приложении Avito)
+    //   • smsWaiter: вызывает onSmsRequired (поллит БД до sms_code от UI)
+    // Что первое сработает — то выигрывает. Если SMS пришёл при открытом push UI —
+    // переключаемся на SMS форму через clickSendSmsButton, потом submit.
     if (postLoginState === "app_confirm" || postLoginState === "sms") {
-      // Если экран подтверждения через приложение — переключаемся на SMS
-      if (postLoginState === "app_confirm") {
-        await clickSendSmsButton(page);
-      }
-
-      // SMS верификация требуется
       if (!onSmsRequired) {
         throw new SmsRequiredError();
       }
 
-      // Передаём управление обработчику, который получит код из UI/БД
-      await onSmsRequired(async (code: string) => {
-        const smsInputSelector = 'input[name="code"], input[name="smsCode"], input[type="tel"]';
-        await page.waitForSelector(smsInputSelector, { timeout: LOGIN_TIMEOUT_MS });
-        await humanType(page, smsInputSelector, code);
-        await randomDelay(300, 600);
-        await humanClick(page, submitSelector);
-        await page.waitForNavigation({ waitUntil: "networkidle2", timeout: LOGIN_TIMEOUT_MS });
-      });
+      const HYBRID_TIMEOUT_MS = 5 * 60 * 1000;
+      let completed = false;
+      // string чтобы TS control-flow analysis не сузил тип в pushPromise/smsPromise
+      let winner: string | null = null;
 
-      // После подтверждения SMS — проверяем что всё прошло
-      const afterSmsState = await detectPostLoginState(page);
-      if (afterSmsState !== "success") {
-        throw new Error("Не удалось войти после SMS. Проверьте код и попробуйте снова.");
+      const pushPromise = (async () => {
+        const startTime = Date.now();
+        while (Date.now() - startTime < HYBRID_TIMEOUT_MS) {
+          if (completed) return;
+          try {
+            const checkState = await page.evaluate(() => {
+              const url = window.location.href;
+              // СТРОГИЙ blocked detector: ищем текст ТОЛЬКО внутри auth/error
+              // диалогов, а не во всём body (там много шума от рекомендаций).
+              const errorContainers = document.querySelectorAll(
+                '[data-marker^="auth-app"], [data-marker^="login-form"], [data-marker^="password-was-reset-form"], [role="dialog"], [class*="error"]'
+              );
+              for (const c of Array.from(errorContainers)) {
+                const t = ((c as HTMLElement).innerText ?? "").toLowerCase();
+                if (
+                  t.includes("доступ закрыт") ||
+                  t.includes("доступ ограничен") ||
+                  t.includes("временно ограничен") ||
+                  t.includes("аккаунт заблокирован")
+                ) return "blocked";
+              }
+              if (
+                url.includes("captcha") ||
+                document.querySelector('iframe[src*="captcha"], iframe[src*="smartcaptcha"]')
+              ) return "captcha";
+              const loggedIn =
+                document.querySelector('[data-marker="header/profile"]') ||
+                document.querySelector('[data-marker="header/account"]') ||
+                document.querySelector('[data-marker="header/messenger"]');
+              const noLoginForm = !document.querySelector('[data-marker^="login-form/"]');
+              const noLoginBtn = !document.querySelector('[data-marker="header/login-button"]');
+              const noAuthApp = !document.querySelector('[data-marker^="auth-app"]');
+              if (loggedIn || (noLoginForm && noLoginBtn && noAuthApp && !url.includes("login"))) return "success";
+              return "waiting";
+            });
+            if (checkState === "success") {
+              completed = true;
+              winner = "push";
+              console.error("[session-manager] push-confirmation выиграл — login успешен");
+              return;
+            }
+            if (checkState === "blocked") {
+              completed = true;
+              throw new Error(
+                "Avito заблокировал вход во время ожидания push-подтверждения"
+              );
+            }
+            if (checkState === "captcha") {
+              completed = true;
+              throw new CaptchaRequiredError();
+            }
+          } catch (e) {
+            if (completed && winner === "sms") return; // SMS уже выиграл, тихо выходим
+            throw e;
+          }
+          await randomDelay(2000, 3000);
+        }
+      })();
+
+      const smsPromise = (async () => {
+        try {
+          await onSmsRequired(async (code: string) => {
+            if (completed) return;
+            // Если открыт push-UI (app_confirm), сначала переключаемся на SMS форму
+            const hasPushUI = await page.evaluate(() => {
+              return !!document.querySelector('[data-marker^="auth-app/"]') ||
+                     !!document.querySelector('[data-marker="password-was-reset-form/title"]');
+            });
+            if (hasPushUI) {
+              console.error("[session-manager] SMS получен — переключаю на SMS форму");
+              await clickSendSmsButton(page).catch((e) => {
+                console.error("[session-manager] clickSendSmsButton failed:", (e as Error)?.message);
+              });
+            }
+            const smsInputSelector = 'input[name="code"], input[name="smsCode"], input[type="tel"], input[autocomplete="one-time-code"], input[inputmode="numeric"]';
+            await page.waitForSelector(smsInputSelector, { timeout: LOGIN_TIMEOUT_MS });
+            await humanType(page, smsInputSelector, code);
+            await randomDelay(300, 600);
+            await humanClick(page, submitSelector);
+            await Promise.race([
+              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 25000 }).catch(() => null),
+              page.waitForFunction(
+                () => {
+                  const loggedIn = document.querySelector('[data-marker="header/profile"], [data-marker="header/account"], [data-marker="header/messenger"]');
+                  const noLoginForm = !document.querySelector('[data-marker^="login-form/"]');
+                  const noLoginBtn = !document.querySelector('[data-marker="header/login-button"]');
+                  return !!loggedIn || (noLoginForm && noLoginBtn);
+                },
+                { timeout: 25000 }
+              ).catch(() => null),
+            ]);
+            await randomDelay(800, 1500);
+            completed = true;
+            winner = "sms";
+            console.error("[session-manager] SMS-flow выиграл");
+          });
+        } catch (e) {
+          if (completed && winner === "push") return; // push уже выиграл, OK
+          throw e;
+        }
+      })();
+
+      // Ждём кто первый завершится (любой error пробросится дальше)
+      await Promise.race([pushPromise, smsPromise]);
+
+      // Финальная верификация: убеждаемся что мы в success state
+      const afterAuthState = await page.evaluate(() => {
+        const loggedIn =
+          document.querySelector('[data-marker="header/profile"]') ||
+          document.querySelector('[data-marker="header/account"]') ||
+          document.querySelector('[data-marker="header/messenger"]');
+        const noLoginForm = !document.querySelector('[data-marker^="login-form/"]');
+        const noLoginBtn = !document.querySelector('[data-marker="header/login-button"]');
+        return !!loggedIn || (noLoginForm && noLoginBtn);
+      });
+      if (!afterAuthState) {
+        throw new Error("Не удалось войти. Push не подтверждён и SMS не сработал.");
       }
     }
 
