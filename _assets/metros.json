@@ -1,0 +1,122 @@
+[
+  {
+    "address": "Москва, Кольцевая линия, метро Парк культуры",
+    "addressId": 1074116,
+    "locationId": 637640,
+    "metroId": 82,
+    "districtId": 724,
+    "lat": 55.735307,
+    "lng": 37.592869,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzM1MzA3LCJsb25naXR1ZGUiOjM3LjU5Mjg2OSwiYWRkcmVzcyI6ItCc0L7RgdC60LLQsCwg0JrQvtC70YzRhtC10LLQsNGPINC70LjQvdC40Y8sINC80LXRgtGA0L4g0J_QsNGA0Log0LrRg9C70YzRgtGD0YDRiyIsImFkZHJlc3NJZCI6MTA3NDExNiwibG9jYXRpb25JZCI6NjM3NjQwLCJtZXRyb0lkIjo4MiwiZGlzdHJpY3RJZCI6NzI0fQ.aCtD9lBTitVplFeWAEAsjkt5FTXSjaZjNgwLj40eFTE"
+  },
+  {
+    "address": "Москва, Кольцевая линия, метро Октябрьская",
+    "addressId": 1063638,
+    "locationId": 637640,
+    "metroId": 75,
+    "districtId": 738,
+    "lat": 55.729219,
+    "lng": 37.611185,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzI5MjE5LCJsb25naXR1ZGUiOjM3LjYxMTE4NSwiYWRkcmVzcyI6ItCc0L7RgdC60LLQsCwg0JrQvtC70YzRhtC10LLQsNGPINC70LjQvdC40Y8sINC80LXRgtGA0L4g0J7QutGC0Y_QsdGA0YzRgdC60LDRjyIsImFkZHJlc3NJZCI6MTA2MzYzOCwibG9jYXRpb25JZCI6NjM3NjQwLCJtZXRyb0lkIjo3NSwiZGlzdHJpY3RJZCI6NzM4fQ.GOYrar3NF_03mnGRXQuk-152Iu_I9naxULyVAsnH0Lc"
+  },
+  {
+    "address": "Москва, Кольцевая линия, метро Добрынинская",
+    "addressId": 1122339,
+    "locationId": 637640,
+    "metroId": 32,
+    "districtId": 645,
+    "lat": 55.728996,
+    "lng": 37.622747,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzI4OTk2LCJsb25naXR1ZGUiOjM3LjYyMjc0NywiYWRkcmVzcyI6ItCc0L7RgdC60LLQsCwg0JrQvtC70YzRhtC10LLQsNGPINC70LjQvdC40Y8sINC80LXRgtGA0L4g0JTQvtCx0YDRi9C90LjQvdGB0LrQsNGPIiwiYWRkcmVzc0lkIjoxMTIyMzM5LCJsb2NhdGlvbklkIjo2Mzc2NDAsIm1ldHJvSWQiOjMyLCJkaXN0cmljdElkIjo2NDV9.SO4CmvJDi99JOaqUQkfACCSdLbuTBXtdwjVD3BGuH-A"
+  },
+  {
+    "address": "Москва, Замоскворецкая линия, метро Павелецкая",
+    "addressId": 2852550,
+    "locationId": 637640,
+    "metroId": 80,
+    "districtId": 645,
+    "lat": 55.73001,
+    "lng": 37.638413,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzMwMDEsImxvbmdpdHVkZSI6MzcuNjM4NDEzLCJhZGRyZXNzIjoi0JzQvtGB0LrQstCwLCDQl9Cw0LzQvtGB0LrQstC-0YDQtdGG0LrQsNGPINC70LjQvdC40Y8sINC80LXRgtGA0L4g0J_QsNCy0LXQu9C10YbQutCw0Y8iLCJhZGRyZXNzSWQiOjI4NTI1NTAsImxvY2F0aW9uSWQiOjYzNzY0MCwibWV0cm9JZCI6ODAsImRpc3RyaWN0SWQiOjY0NX0.SFmd9w_COPkV8cn6JwRuvUS5sOkQmoKUp0FXFEB8lXM"
+  },
+  {
+    "address": "Москва, Таганско-Краснопресненская линия, метро Таганская",
+    "addressId": 1075240,
+    "locationId": 637640,
+    "metroId": 62,
+    "districtId": 716,
+    "lat": 55.739549,
+    "lng": 37.652957,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzM5NTQ5LCJsb25naXR1ZGUiOjM3LjY1Mjk1NywiYWRkcmVzcyI6ItCc0L7RgdC60LLQsCwg0KLQsNCz0LDQvdGB0LrQvi3QmtGA0LDRgdC90L7Qv9GA0LXRgdC90LXQvdGB0LrQsNGPINC70LjQvdC40Y8sINC80LXRgtGA0L4g0KLQsNCz0LDQvdGB0LrQsNGPIiwiYWRkcmVzc0lkIjoxMDc1MjQwLCJsb2NhdGlvbklkIjo2Mzc2NDAsIm1ldHJvSWQiOjYyLCJkaXN0cmljdElkIjo3MTZ9.0DZ5Jmx0_ayir7Hmns7TUoZWlClzQcY_QQmA0P5Bw3E"
+  },
+  {
+    "address": "Москва, Кольцевая линия, метро Курская",
+    "addressId": 1869881,
+    "locationId": 637640,
+    "metroId": 57,
+    "districtId": 622,
+    "lat": 55.75745,
+    "lng": 37.659937,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzU3NDUsImxvbmdpdHVkZSI6MzcuNjU5OTM3LCJhZGRyZXNzIjoi0JzQvtGB0LrQstCwLCDQmtC-0LvRjNGG0LXQstCw0Y8g0LvQuNC90LjRjywg0LzQtdGC0YDQviDQmtGD0YDRgdC60LDRjyIsImFkZHJlc3NJZCI6MTg2OTg4MSwibG9jYXRpb25JZCI6NjM3NjQwLCJtZXRyb0lkIjo1NywiZGlzdHJpY3RJZCI6NjIyfQ.7MECjHJarWNbSSQrfASIEbZH64XEkXIaYTUpSKR-GsI"
+  },
+  {
+    "address": "Москва, Кольцевая линия, метро Комсомольская",
+    "addressId": 1122713,
+    "locationId": 637640,
+    "metroId": 45,
+    "districtId": 656,
+    "lat": 55.775707,
+    "lng": 37.6547,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzc1NzA3LCJsb25naXR1ZGUiOjM3LjY1NDcsImFkZHJlc3MiOiLQnNC-0YHQutCy0LAsINCa0L7Qu9GM0YbQtdCy0LDRjyDQu9C40L3QuNGPLCDQvNC10YLRgNC-INCa0L7QvNGB0L7QvNC-0LvRjNGB0LrQsNGPIiwiYWRkcmVzc0lkIjoxMTIyNzEzLCJsb2NhdGlvbklkIjo2Mzc2NDAsIm1ldHJvSWQiOjQ1LCJkaXN0cmljdElkIjo2NTZ9.RBFnLUEnd4xI1lt3G5QVzlwZKEv_vYXiEUYOfJT0UBg"
+  },
+  {
+    "address": "Москва, Кольцевая линия, метро Проспект Мира",
+    "addressId": 1267908,
+    "locationId": 637640,
+    "metroId": 97,
+    "districtId": 673,
+    "lat": 55.779636,
+    "lng": 37.633473,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzc5NjM2LCJsb25naXR1ZGUiOjM3LjYzMzQ3MywiYWRkcmVzcyI6ItCc0L7RgdC60LLQsCwg0JrQvtC70YzRhtC10LLQsNGPINC70LjQvdC40Y8sINC80LXRgtGA0L4g0J_RgNC-0YHQv9C10LrRgiDQnNC40YDQsCIsImFkZHJlc3NJZCI6MTI2NzkwOCwibG9jYXRpb25JZCI6NjM3NjQwLCJtZXRyb0lkIjo5NywiZGlzdHJpY3RJZCI6NjczfQ.cmuCQUsHxiXyP_MlQ3azzDAANVQ47TQbuxu2l7Jtxoo"
+  },
+  {
+    "address": "Москва, Кольцевая линия, метро Новослободская",
+    "addressId": 1060396,
+    "locationId": 637640,
+    "metroId": 73,
+    "districtId": 717,
+    "lat": 55.779565,
+    "lng": 37.601421,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzc5NTY1LCJsb25naXR1ZGUiOjM3LjYwMTQyMSwiYWRkcmVzcyI6ItCc0L7RgdC60LLQsCwg0JrQvtC70YzRhtC10LLQsNGPINC70LjQvdC40Y8sINC80LXRgtGA0L4g0J3QvtCy0L7RgdC70L7QsdC-0LTRgdC60LDRjyIsImFkZHJlc3NJZCI6MTA2MDM5NiwibG9jYXRpb25JZCI6NjM3NjQwLCJtZXRyb0lkIjo3MywiZGlzdHJpY3RJZCI6NzE3fQ.3Qin13WRKKXEyzxL_1Gwk4p588Gd-6UBzCwaKYBcupQ"
+  },
+  {
+    "address": "Москва, Кольцевая линия, метро Белорусская",
+    "addressId": 1227582,
+    "locationId": 637640,
+    "metroId": 13,
+    "districtId": 717,
+    "lat": 55.776775,
+    "lng": 37.58526,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzc2Nzc1LCJsb25naXR1ZGUiOjM3LjU4NTI2LCJhZGRyZXNzIjoi0JzQvtGB0LrQstCwLCDQmtC-0LvRjNGG0LXQstCw0Y8g0LvQuNC90LjRjywg0LzQtdGC0YDQviDQkdC10LvQvtGA0YPRgdGB0LrQsNGPIiwiYWRkcmVzc0lkIjoxMjI3NTgyLCJsb2NhdGlvbklkIjo2Mzc2NDAsIm1ldHJvSWQiOjEzLCJkaXN0cmljdElkIjo3MTd9.CURHwYkpkCrt2N-VMZiY0_n6PHdC0ll2sLLZPOxLKUY"
+  },
+  {
+    "address": "Москва, Кольцевая линия, метро Краснопресненская",
+    "addressId": 1073505,
+    "locationId": 637640,
+    "metroId": 48,
+    "districtId": 696,
+    "lat": 55.760216,
+    "lng": 37.57722,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzYwMjE2LCJsb25naXR1ZGUiOjM3LjU3NzIyLCJhZGRyZXNzIjoi0JzQvtGB0LrQstCwLCDQmtC-0LvRjNGG0LXQstCw0Y8g0LvQuNC90LjRjywg0LzQtdGC0YDQviDQmtGA0LDRgdC90L7Qv9GA0LXRgdC90LXQvdGB0LrQsNGPIiwiYWRkcmVzc0lkIjoxMDczNTA1LCJsb2NhdGlvbklkIjo2Mzc2NDAsIm1ldHJvSWQiOjQ4LCJkaXN0cmljdElkIjo2OTZ9.v0Ejubk35U8XpQf3oaot5pu832jiw7uyEprMX_kBaWI"
+  },
+  {
+    "address": "Москва, Кольцевая линия, метро Киевская",
+    "addressId": 1147279,
+    "locationId": 637640,
+    "metroId": 41,
+    "districtId": 644,
+    "lat": 55.743928,
+    "lng": 37.568102,
+    "geoFieldsHash": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsYXRpdHVkZSI6NTUuNzQzOTI4LCJsb25naXR1ZGUiOjM3LjU2ODEwMiwiYWRkcmVzcyI6ItCc0L7RgdC60LLQsCwg0JrQvtC70YzRhtC10LLQsNGPINC70LjQvdC40Y8sINC80LXRgtGA0L4g0JrQuNC10LLRgdC60LDRjyIsImFkZHJlc3NJZCI6MTE0NzI3OSwibG9jYXRpb25JZCI6NjM3NjQwLCJtZXRyb0lkIjo0MSwiZGlzdHJpY3RJZCI6NjQ0fQ.rBJxfWnNWBuoEVPMuuDr6iQCL7FrdJsLC7UnE9j4V0Y"
+  }
+]
