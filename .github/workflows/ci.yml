@@ -1,0 +1,58 @@
+name: CI (build + types + lint)
+
+# Gate-проверки: build не должен падать, типы должны совпадать.
+# RLS-тесты — в отдельном workflow (test-rls.yml).
+# E2E — пока запускается вручную, возвращается в CI вместе с authenticated
+# session-injector в Этапе 7.
+
+on:
+  pull_request:
+    branches: [main, owner]
+  push:
+    branches: [main]
+
+jobs:
+  build-and-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Next.js build
+        env:
+          # Dev-env значения — нужны только чтобы сборка не падала на отсутствии
+          # переменных. Реальные секреты подставляются на деплое (Vercel).
+          NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-stub-anon-key"
+          SUPABASE_SERVICE_ROLE_KEY: "ci-stub-service-role-key"
+          SESSION_SECRET: "ci-stub-session-secret-32-bytes-hex-ok"
+          REDIS_URL: "redis://localhost:6379"
+        run: npm run build
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      # --max-warnings не используем: текущий код содержит ~10 pre-existing
+      # warning-ов (next/image, useEffect deps) — fixить не в этом этапе.
+      - name: ESLint
+        run: npm run lint

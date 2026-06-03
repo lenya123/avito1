@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.create_pending_order_atomic(UUID, UUID, UUID, NUMERIC, TEXT, TEXT, DATE, TEXT, UUID, TEXT, BOOLEAN, INTEGER) TO service_role;

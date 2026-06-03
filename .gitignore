@@ -1,0 +1,80 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env
+.env*.local
+.env.test
+
+# tmp scripts
+tmp-*.mjs
+
+# vercel
+.vercel
+
+# supabase
+supabase/.temp/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# playwright mcp
+.playwright-mcp/
+
+# playwright test artifacts
+/playwright-report/
+/test-results/
+
+# claude screenshots
+.claude/screenshots/
+
+# Screenshots - запретить в корне, разрешить в docs
+*.png
+!docs/**/*.png
+!public/**/*.png
+
+.worktrees/
+
+# локальные рабочие заметки сессий (конспекты ассистента — не в репо)
+dionis-n info/
+
+# dev-логи (npm run dev:all и т.п.)
+dev-all.log
+*-all.log
+
+# временные probe-скрипты (по конвенции чистятся после; не коммитим)
+scripts/_tmp-*
+scripts/tmp-*
+
+# локальные конфиги / секрет-риск
+.mcp.json
+.vscode/
+.env.local.template
+
+# архивы исходников (распарсили — в репо не держим)
+*.zip

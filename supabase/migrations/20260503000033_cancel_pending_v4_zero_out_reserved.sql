@@ -1,0 +1,136 @@
+-- cancel_pending_order_atomic v4: фикс к v3.
+-- При p_zero_out_source=true обнуляем не только current_quantity, но и
+-- reserved_quantity у источника. Иначе если у этой binding-привязки висят
+-- другие активные pending'ы на этот же размер, free=current-reserved уходит
+-- в отрицательное число и товар исчезает из каталога странным образом.
+-- Семантически: партнёр сказал «у меня этого нет» → все резервы должны быть
+-- сброшены. Если у других клиентов есть pending'и на этот размер — они
+-- получат отказ при следующей попытке подтверждения через партнёра.
+
+CREATE OR REPLACE FUNCTION public.cancel_pending_order_atomic(
+  p_pending_order_id        UUID,
+  p_credit_full_to_balance  BOOLEAN DEFAULT FALSE,
+  p_record_partner_debt     BOOLEAN DEFAULT FALSE,
+  p_zero_out_source         BOOLEAN DEFAULT FALSE,
+  p_partner_debt_reason     TEXT    DEFAULT 'size_out_money_received'
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $func$
+DECLARE
+  v_pending     RECORD;
+  v_size_text   TEXT;
+  v_new_balance NUMERIC;
+  v_now         TIMESTAMPTZ := NOW();
+BEGIN
+  SELECT * INTO v_pending
+    FROM public.pending_orders
+   WHERE id = p_pending_order_id
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN FALSE;
+  END IF;
+
+  -- Возврат applied_balance (если был) — старая семантика.
+  IF COALESCE(v_pending.applied_balance, 0) > 0 AND v_pending.customer_id IS NOT NULL THEN
+    UPDATE public.customers
+       SET customer_balance = customer_balance + v_pending.applied_balance
+     WHERE id = v_pending.customer_id
+     RETURNING customer_balance INTO v_new_balance;
+
+    INSERT INTO public.customer_balance_history (
+      customer_id, delta, balance_after, reason, created_at
+    ) VALUES (
+      v_pending.customer_id,
+      v_pending.applied_balance,
+      v_new_balance,
+      'balance_return',
+      v_now
+    );
+  END IF;
+
+  -- Автокредит client_price на баланс — для случая «партнёр получил деньги
+  -- но размер закончился».
+  IF p_credit_full_to_balance AND COALESCE(v_pending.client_price, 0) > 0
+     AND v_pending.customer_id IS NOT NULL
+  THEN
+    UPDATE public.customers
+       SET customer_balance = customer_balance + v_pending.client_price
+     WHERE id = v_pending.customer_id
+     RETURNING customer_balance INTO v_new_balance;
+
+    INSERT INTO public.customer_balance_history (
+      customer_id, delta, balance_after, reason, created_at
+    ) VALUES (
+      v_pending.customer_id,
+      v_pending.client_price,
+      v_new_balance,
+      'partner_refund_credit',
+      v_now
+    );
+  END IF;
+
+  -- Долг партнёра перед владельцем — для того же случая.
+  IF p_record_partner_debt AND v_pending.source_kind = 'partner'
+     AND v_pending.source_partner_id IS NOT NULL
+  THEN
+    INSERT INTO public.partner_owner_debts (
+      partner_id, order_id, pending_id, amount, reason, created_at
+    ) VALUES (
+      v_pending.source_partner_id,
+      NULL,
+      v_pending.id,
+      v_pending.client_price,
+      p_partner_debt_reason,
+      v_now
+    );
+  END IF;
+
+  -- Размер текстом — для DEC reserved у partner-источника и для обнуления.
+  SELECT size INTO v_size_text
+    FROM public.product_sizes
+   WHERE id = v_pending.product_size_id;
+
+  -- Обнуление current_quantity И reserved_quantity у источника (size_out / product_out).
+  -- reserved=0 нужен иначе у других активных pending'ов резервы повиснут и
+  -- свободный остаток уйдёт в минус.
+  IF p_zero_out_source THEN
+    IF v_pending.source_kind = 'partner'
+       AND v_pending.source_binding_id IS NOT NULL
+       AND v_size_text IS NOT NULL
+    THEN
+      UPDATE public.product_partner_size_stock
+         SET current_quantity = 0,
+             reserved_quantity = 0
+       WHERE binding_id = v_pending.source_binding_id
+         AND size = v_size_text;
+    ELSE
+      UPDATE public.product_sizes
+         SET current_quantity = 0,
+             reserved_quantity = 0
+       WHERE id = v_pending.product_size_id;
+    END IF;
+  ELSE
+    -- Без zero_out — обычное снятие резерва текущего pending'а.
+    IF v_pending.source_kind = 'partner'
+       AND v_pending.source_binding_id IS NOT NULL
+       AND v_size_text IS NOT NULL
+    THEN
+      UPDATE public.product_partner_size_stock
+         SET reserved_quantity = GREATEST(COALESCE(reserved_quantity, 0) - 1, 0)
+       WHERE binding_id = v_pending.source_binding_id
+         AND size = v_size_text;
+    ELSE
+      UPDATE public.product_sizes
+         SET reserved_quantity = GREATEST(COALESCE(reserved_quantity, 0) - 1, 0)
+       WHERE id = v_pending.product_size_id;
+    END IF;
+  END IF;
+
+  DELETE FROM public.pending_orders WHERE id = p_pending_order_id;
+
+  RETURN TRUE;
+END;
+$func$;
