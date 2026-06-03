@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:NODE_ENV='development'; Set-Location 'C:\\\\Users\\\\qru\\\\Desktop\\\\авито\\\\avito-autopost'; npm run dev)"
+    ]
+  }
+}
