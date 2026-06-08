@@ -6,7 +6,7 @@ import type { Job } from "bullmq";
 import { createServiceClient, createServiceClientLoose } from "@/lib/supabase/server";
 import { generateListingContent } from "@/lib/ai/listing-content";
 import { mixPhotos } from "@/lib/avito/photo-mixer";
-import { submitAvitoListingViaCookies } from "@/lib/avito/web-client";
+import { submitAvitoListingViaCookies, fetchAvitoProfile, AVITO_CATEGORIES, type AvitoCategory } from "@/lib/avito/web-client";
 import { getWebSessionById } from "@/lib/avito";
 import { resolveListingLocation } from "@/lib/avito/location-resolver";
 import { bumpCoverUsage, bumpPhotosetSetUsage } from "@/lib/avito/ladder";
@@ -44,12 +44,13 @@ export async function handleAvitoPostListing(
     let productPhotos: string[] = [];
     let title = jobRow.title;
     let description = jobRow.description ?? "";
+    let productBrand: string | null = null;
 
     if (jobRow.product_id) {
       // loose: products.city отсутствует в database.generated.ts до db:gen-types
       const { data: productRaw } = await loose
         .from("products")
-        .select("name, description, brand, category, photo_urls, photo_main_index, measurements, city")
+        .select("name, description, brand, category, photo_urls, photo_main_index, city")
         .eq("id", jobRow.product_id)
         .maybeSingle();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,6 +58,7 @@ export async function handleAvitoPostListing(
 
       if (product) {
         productPhotos = (product.photo_urls as string[] | null) ?? [];
+        productBrand = (product.brand as string | null) ?? null;
         if (!title || !description) {
           const gen = await generateListingContent({
             name: product.name,
@@ -119,6 +121,36 @@ export async function handleAvitoPostListing(
     if (!webSession) {
       throw new Error("Сессия Avito недоступна (cookies не найдены)");
     }
+
+    // Контакты продавца — из САМОГО акка (универсально для разных акков):
+    // имя из профиля Avito, телефон из логина акка (avito_login). Хардкод Лёни
+    // убран в submitAvitoListingViaCookies; если тут не определим — Avito возьмёт
+    // дефолтный контакт залогиненного акка.
+    let sellerName: string | undefined;
+    let sellerPhone: string | undefined;
+    try {
+      const prof = await fetchAvitoProfile(webSession);
+      if (prof?.name) sellerName = prof.name;
+    } catch {
+      /* профиль не критичен */
+    }
+    try {
+      const { data: sRow } = await loose
+        .from("avito_browser_sessions")
+        .select("avito_login")
+        .eq("id", jobRow.session_id)
+        .maybeSingle();
+      const login = ((sRow as { avito_login?: string | null } | null)?.avito_login ?? "").trim();
+      if (login.replace(/\D/g, "").length >= 10) sellerPhone = login; // avito_login = телефон
+    } catch {
+      /* не критично */
+    }
+
+    const rawCat = job.data.category;
+    const category: AvitoCategory | undefined =
+      rawCat && (AVITO_CATEGORIES as string[]).includes(rawCat)
+        ? (rawCat as AvitoCategory)
+        : undefined;
     const result = await submitAvitoListingViaCookies(webSession, {
       title,
       description,
@@ -126,6 +158,10 @@ export async function handleAvitoPostListing(
       address: loc.address || loc.city,
       metro: loc.metro ?? jobRow.metro ?? null,
       photos: buffers,
+      category,
+      brand: productBrand,
+      sellerName,
+      phone: sellerPhone,
     });
     if (!result.ok) {
       throw new Error(result.message ?? "Avito отказал в публикации");

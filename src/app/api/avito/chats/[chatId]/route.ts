@@ -31,56 +31,68 @@ export async function GET(
       return NextResponse.json({ error: "Чат не найден" }, { status: 404 });
     }
 
-    // Проверяем есть ли уже сообщения в кеше
-    const { data: cachedMessages, count } = await supabase
-      .from("avito_messages")
-      .select("*", { count: "exact" })
-      .eq("chat_id", chatId)
-      .order("avito_created_at", { ascending: true });
+    // ВСЕГДА подтягиваем свежие сообщения из Avito (чат пополняется, а кеш сам
+    // не обновляется — раньше тянули лишь при пустом кеше, из-за чего новые и
+    // ассистент-сообщения в диалоге не появлялись). Upsert БЕЗ ignoreDuplicates —
+    // обновляет существующие строки, корректируя устаревший текст.
+    const webSession = chat.session_id ? await getWebSessionById(chat.session_id) : null;
+    if (webSession) {
+      try {
+        // owner numeric id (avito_user_id) — для direction ("out" если от нас)
+        const { data: sessRow } = await supabase
+          .from("avito_browser_sessions")
+          .select("avito_user_id")
+          .eq("id", chat.session_id as string)
+          .maybeSingle();
+        const ownerId =
+          (sessRow as { avito_user_id?: number | null } | null)?.avito_user_id ?? undefined;
+        const messages = await fetchAvitoChatMessages(
+          webSession,
+          chat.avito_chat_id,
+          50,
+          ownerId
+        );
 
-    // Если в кеше пусто — подтягиваем через web proxy
-    if (!count || count === 0) {
-      const webSession = chat.session_id
-        ? await getWebSessionById(chat.session_id)
-        : null;
-
-      if (webSession) {
-        try {
-          const messages = await fetchAvitoChatMessages(webSession, chat.avito_chat_id);
-
-          if (messages.length > 0) {
-            const messagesToInsert = messages.map((msg) => ({
-              chat_id: chatId,
-              user_id: userId,
-              avito_message_id: msg.id,
-              direction: msg.direction,
-              content_text: msg.text,
-              content_image_url: msg.imageUrl,
-              message_type: msg.type,
-              author_id: msg.authorId,
-              avito_created_at: new Date(msg.created * 1000).toISOString(),
-            }));
-
-            await supabase.from("avito_messages").upsert(messagesToInsert, {
-              onConflict: "chat_id,avito_message_id",
-              ignoreDuplicates: true,
-            });
-
-            const { data: freshMessages } = await supabase
+        if (messages.length > 0) {
+          const rows = messages.map((msg) => ({
+            chat_id: chatId,
+            user_id: userId,
+            avito_message_id: msg.id,
+            direction: msg.direction,
+            content_text: msg.text,
+            content_image_url: msg.imageUrl,
+            message_type: msg.type,
+            author_id: msg.authorId,
+            avito_created_at: new Date(msg.created * 1000).toISOString(),
+          }));
+          // Реконсиляция окна: удаляем из кеша сообщения в диапазоне свежего
+          // набора, которых уже НЕТ в Avito (удалённые/отклонённые модерацией —
+          // напр. свой отправленный и заблокированный). История старше окна цела.
+          const oldest = messages.reduce((m, x) => Math.min(m, x.created), Infinity);
+          if (Number.isFinite(oldest)) {
+            await supabase
               .from("avito_messages")
-              .select("*")
+              .delete()
               .eq("chat_id", chatId)
-              .order("avito_created_at", { ascending: true });
-
-            return NextResponse.json({ chat, messages: freshMessages || [] });
+              .gte("avito_created_at", new Date(oldest * 1000).toISOString());
           }
-        } catch (err) {
-          console.error("[avito/chat] Web fetch messages error:", err);
+          await supabase
+            .from("avito_messages")
+            .upsert(rows, { onConflict: "chat_id,avito_message_id" });
         }
+      } catch (err) {
+        console.error("[avito/chat] Web fetch messages error:", err);
       }
     }
 
-    return NextResponse.json({ chat, messages: cachedMessages || [] });
+    // Возвращаем актуальный набор (кеш уже пополнен свежими).
+    const { data: allMessages } = await supabase
+      .from("avito_messages")
+      .select("*")
+      .eq("chat_id", chatId)
+      .order("avito_created_at", { ascending: true });
+
+    return NextResponse.json({ chat, messages: allMessages || [] });
   } catch (error) {
     console.error("Avito chat messages error:", error);
     return NextResponse.json({ error: "Ошибка сервера" }, { status: 500 });

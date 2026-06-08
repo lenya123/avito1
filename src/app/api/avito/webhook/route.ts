@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
           synced_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id,avito_chat_id" }
+        { onConflict: "session_id,avito_chat_id" }
       )
       .select("id")
       .single();

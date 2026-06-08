@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getUserIdFromSession } from "@/lib/avito/resolve-session";
+import { scheduleAvitoRequestSize } from "@/lib/jobs/queues";
 import { z } from "zod";
 
 const linkSchema = z.object({
@@ -65,7 +66,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ошибка привязки" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    // ТЗ §3.2: уже созданные заказы этого объявления, висящие в awaiting_size без
+    // привязки к товару — добиваем после привязки: проставляем product_id и
+    // запускаем AI-уточнение размера (раньше после привязки AI не стартовал —
+    // заказ навсегда оставался в awaiting_size). orders ↔ avito_orders по
+    // avito_order_id; avito_item_id живёт на avito_orders.
+    let triggered = 0;
+    try {
+      const { data: aoRows } = await supabase
+        .from("avito_orders")
+        .select("avito_order_id")
+        // avito_orders.avito_item_id — text-колонка; приводим number→string.
+        .eq("avito_item_id", String(params.avito_item_id));
+      const aoIds = (aoRows ?? [])
+        .map((r) => (r as { avito_order_id: string }).avito_order_id)
+        .filter(Boolean);
+      if (aoIds.length) {
+        const { data: pending } = await supabase
+          .from("orders")
+          .select("id")
+          .eq("source", "avito")
+          .eq("status", "awaiting_size")
+          .is("product_id", null)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .in("avito_order_id", aoIds as any);
+        for (const o of (pending ?? []) as Array<{ id: string }>) {
+          await supabase.from("orders").update({ product_id: params.product_id }).eq("id", o.id);
+          await scheduleAvitoRequestSize(o.id);
+          triggered++;
+        }
+      }
+    } catch (e) {
+      console.error("[avito/items/link] post-link AI trigger failed:", e);
+    }
+
+    return NextResponse.json({ success: true, sizeRequestTriggered: triggered });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Невалидные данные" }, { status: 400 });

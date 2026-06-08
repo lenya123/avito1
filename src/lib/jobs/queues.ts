@@ -54,6 +54,10 @@ export interface SyncAvitoDataJobData {
 export interface SyncAvitoTodayStatsJobData {
   userId: string;
   itemIds: number[];
+  /** Сессия конкретного Avito-акка — обязательна для мультиаккаунта: today-stats
+   *  должны идти через cookies/proxy ЭТОГО акка и писаться в его строки. */
+  sessionId?: string;
+  accountIndex?: number;
 }
 
 export interface AvitoLoginJobData {
@@ -76,6 +80,8 @@ export interface AvitoItemActionJobData {
 
 export interface AvitoPostListingJobData {
   postJobId: string;
+  /** Категория Avito для шаблона submit (см. AvitoCategory в web-client). */
+  category?: string;
 }
 
 // Avito AI-генерация фото (3 категории) с подтверждением в owner-bot.
@@ -454,12 +460,19 @@ export async function rescheduleAvitoSync(): Promise<void> {
  * Запускается с задержкой 61с после основной синхронизации
  * (V2 Stats API: rate limit 1 req/min).
  */
-export async function scheduleAvitoTodayStats(userId: string, itemIds: number[]): Promise<string> {
+export async function scheduleAvitoTodayStats(
+  userId: string,
+  itemIds: number[],
+  sessionId?: string,
+  accountIndex?: number
+): Promise<string> {
   const queue = getAutomationQueue();
 
-  const jobId = `avito-today-stats-${userId}`;
+  // jobId включает сессию/акк — иначе sync акка #2 удаляет ещё не выполненный
+  // pending-job акка #1 (мультиаккаунт терял today-stats всех кроме последнего).
+  const jobId = `avito-today-stats-${userId}-${sessionId ?? accountIndex ?? "1"}`;
 
-  // Удалить предыдущий job если ещё не выполнен
+  // Удалить предыдущий job ЭТОГО же акка если ещё не выполнен
   try {
     const existing = await queue.getJob(jobId);
     if (existing) {
@@ -471,7 +484,7 @@ export async function scheduleAvitoTodayStats(userId: string, itemIds: number[])
 
   await queue.add(
     "sync-avito-today-stats",
-    { userId, itemIds },
+    { userId, itemIds, sessionId, accountIndex },
     {
       delay: 61_000, // 61с — V2 rate limit 1 req/min
       jobId,
@@ -479,7 +492,7 @@ export async function scheduleAvitoTodayStats(userId: string, itemIds: number[])
   );
 
   console.log(
-    `[Jobs] Scheduled sync-avito-today-stats for ${userId} (${itemIds.length} items) in 61s`
+    `[Jobs] Scheduled sync-avito-today-stats for ${userId}/${sessionId ?? accountIndex ?? "1"} (${itemIds.length} items) in 61s`
   );
 
   return jobId;
@@ -1469,12 +1482,12 @@ export async function scheduleProxyHealthCheck(): Promise<void> {
     {
       jobId: "proxy-health-check-periodic",
       repeat: {
-        every: 30 * 60 * 1000,
+        every: 10 * 60 * 1000,
       },
     }
   );
 
-  console.log("[Jobs] Scheduled proxy-health-check every 30 min");
+  console.log("[Jobs] Scheduled proxy-health-check (+failover) every 10 min");
 }
 
 // =============================================================================
@@ -1546,12 +1559,15 @@ export async function scheduleAvitoItemAction(
 // =============================================================================
 // Avito post-listing (автопостинг через браузер, Phase 4)
 // =============================================================================
-export async function scheduleAvitoPostListing(postJobId: string): Promise<string> {
+export async function scheduleAvitoPostListing(
+  postJobId: string,
+  category?: string
+): Promise<string> {
   const queue = getAutomationQueue();
   const jobId = `post-listing-${postJobId}`;
   await queue.add(
     "avito-post-listing",
-    { postJobId } as AvitoPostListingJobData,
+    { postJobId, category } as AvitoPostListingJobData,
     { jobId }
   );
   console.log(`[Jobs] Scheduled avito-post-listing for ${postJobId}`);

@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OrderStatus } from "@/types/database";
+import { appendStatusHistory } from "@/lib/orders/status-history";
 import type {
   ParsedAvitoOrderDetail,
   ParsedAvitoOrderLog,
@@ -167,7 +168,13 @@ export async function upsertOrderFromAvito(args: {
   parsedDetail?: ParsedAvitoOrderDetail | null;
   /** ТЗ §15.9: данные из /api/2/order-log (точные timestamps + tracking). */
   parsedLog?: ParsedAvitoOrderLog | null;
-}): Promise<{ orderId: string; status: OrderStatus; isNew: boolean } | null> {
+}): Promise<{
+  orderId: string;
+  status: OrderStatus;
+  isNew: boolean;
+  /** ТЗ §8.3: переходы, случившиеся впервые на этом синке (для DM caller'ом). */
+  transitions: { delivered: boolean; returnInitiated: boolean; returnArrived: boolean };
+} | null> {
   const { supabase, ownerUserId, avitoOrder, mapping, parsedDetail, parsedLog } = args;
 
   // 1) Достаём существующий заказ (если уже синкали раньше) — нужно
@@ -176,7 +183,7 @@ export async function upsertOrderFromAvito(args: {
   const { data: existing } = await (supabase as any)
     .from("orders")
     .select(
-      "id, status, product_id, product_size_id, delivered_at, return_initiated_at, return_arrived_at"
+      "id, status, status_history, product_id, product_size_id, delivered_at, return_initiated_at, return_arrived_at, expected_return_date, tracking_number, barcode_image_url"
     )
     .eq("source", "avito")
     .eq("avito_order_id", avitoOrder.avito_order_id)
@@ -213,17 +220,17 @@ export async function upsertOrderFromAvito(args: {
 
   // 4) Поля-снапшоты таймлайна — ставим однократно при переходе.
   const now = new Date().toISOString();
-  const deliveredAt =
-    targetStatus === "delivered" && !existing?.delivered_at ? now : existing?.delivered_at ?? null;
-  const returnInitiatedAt =
+  // Флаги «переход случился впервые на этом синке» — те же условия, что и
+  // у снапшотов (snapshot ещё пуст). Используются caller'ом для DM на трёх
+  // значимых событиях логистики (ТЗ §8.3). Идемпотентны между синками.
+  const justDelivered = targetStatus === "delivered" && !existing?.delivered_at;
+  const justReturnInitiated =
     (targetStatus === "return_in_transit" || targetStatus === "return") &&
-    !existing?.return_initiated_at
-      ? now
-      : existing?.return_initiated_at ?? null;
-  const returnArrivedAt =
-    targetStatus === "return" && !existing?.return_arrived_at
-      ? now
-      : existing?.return_arrived_at ?? null;
+    !existing?.return_initiated_at;
+  const justReturnArrived = targetStatus === "return" && !existing?.return_arrived_at;
+  const deliveredAt = justDelivered ? now : existing?.delivered_at ?? null;
+  const returnInitiatedAt = justReturnInitiated ? now : existing?.return_initiated_at ?? null;
+  const returnArrivedAt = justReturnArrived ? now : existing?.return_arrived_at ?? null;
 
   // ТЗ §15.9: BeduinUI-данные приоритетны если есть — точные значения от Avito.
   const buyerName = parsedDetail?.buyerName ?? extractBuyerName(details);
@@ -232,9 +239,23 @@ export async function upsertOrderFromAvito(args: {
     parsedDetail?.clientPrice != null
       ? parsedDetail.clientPrice
       : avitoOrder.cost_total ?? 0;
-  // tracking_number — приоритет: order-log > details.parcelId > avito_orders.
+  // tracking_number / стикер — приоритет: order-log > details.parcelId >
+  // avito_orders > dispatchCode из profile/order. Критично НЕ понижать до null:
+  // ensureAvitoStikerLoaded (awaiting_size→paid) мог уже подтянуть стикер, а
+  // обычный синк без свежих данных НЕ должен его стирать (ТЗ §9.4 — к моменту
+  // collecting tracking_number обязан быть). Фолбэк на dispatchCode даёт
+  // отправщику что печатать, даже если parcelId ещё не сгенерён.
   const trackingFinal =
-    parsedLog?.trackingNumber ?? trackingNumber ?? null;
+    parsedLog?.trackingNumber ??
+    trackingNumber ??
+    parsedDetail?.dispatchCode ??
+    existing?.tracking_number ??
+    null;
+  const barcodeFinal =
+    barcodeUrl ??
+    parsedDetail?.dispatchBarcodeUrl ??
+    existing?.barcode_image_url ??
+    null;
 
   // delivery_details расширяем channelId (для findChatForAvitoOrder)
   // + сохраняем сырые details для дебага.
@@ -259,6 +280,18 @@ export async function upsertOrderFromAvito(args: {
     parsedLog?.returnInitiatedAt ?? returnInitiatedAt;
   const returnArrivedFinal =
     parsedLog?.returnArrivedAt ?? returnArrivedAt;
+
+  // expected_return_date — дата прибытия возврата на ПВЗ (ТЗ §9.1: основной
+  // вход для подбора возврата под problem-заказ; авито-ветка матчинга бьётся
+  // ровно об это поле). returnReceiveBy = deliveryDate возврата из BeduinUI.
+  // Ставим только в возвратных статусах; не понижаем существующее до null.
+  let expectedReturnDate: string | null = existing?.expected_return_date ?? null;
+  if (targetStatus === "return_in_transit" || targetStatus === "return") {
+    const raw = parsedDetail?.returnReceiveBy ?? null;
+    if (raw && !isNaN(new Date(raw).getTime())) {
+      expectedReturnDate = new Date(raw).toISOString().slice(0, 10);
+    }
+  }
 
   // 5) Собираем payload.
   const payload = {
@@ -289,8 +322,9 @@ export async function upsertOrderFromAvito(args: {
     client_price: clientPrice,
     delivery_service: "avito" as const,
     tracking_number: trackingFinal,
-    barcode_image_url: barcodeUrl,
-    delivery_deadline: sendBy,
+    barcode_image_url: barcodeFinal,
+    // delivery_deadline убран: колонки нет в схеме orders, значение дублирует send_by
+    // (вставка падала «Could not find the 'delivery_deadline' column» → 0 Avito-заказов).
     send_by: sendBy,
     pickup_by: pickupBy,
     status: targetStatus,
@@ -300,6 +334,7 @@ export async function upsertOrderFromAvito(args: {
     delivered_at: deliveredAtFinal,
     return_initiated_at: returnInitiatedFinal,
     return_arrived_at: returnArrivedFinal,
+    expected_return_date: expectedReturnDate,
     system_comment: !mapping?.product_id
       ? "Авито-объявление не привязано к товару"
       : null,
@@ -312,31 +347,67 @@ export async function upsertOrderFromAvito(args: {
   // обновляется в caller'е (sync-avito-orders apartheid upsert).
   void mergedDeliveryDetails;
 
+  // ТЗ §8.2: фиксируем переход статуса в status_history (Avito-синк раньше менял
+  // status, но историю не писал — таймлайн был неполным). Пишем только при смене.
+  const statusChanged = targetStatus !== (existing?.status as OrderStatus | undefined);
+
   if (existing?.id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updatePayload: Record<string, unknown> = { ...payload };
+    if (statusChanged) {
+      updatePayload.status_history = appendStatusHistory(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (existing as any).status_history ?? null,
+        targetStatus,
+        { via: "avito-sync" }
+      );
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
       .from("orders")
-      .update(payload)
+      .update(updatePayload)
       .eq("id", existing.id);
     if (error) {
       console.error("[order-sync] update error", avitoOrder.avito_order_id, error.message);
       return null;
     }
-    return { orderId: existing.id, status: targetStatus, isNew: false };
+    return {
+      orderId: existing.id,
+      status: targetStatus,
+      isNew: false,
+      transitions: {
+        delivered: justDelivered,
+        returnInitiated: justReturnInitiated,
+        returnArrived: justReturnArrived,
+      },
+    };
   }
 
-  // Insert новый заказ.
+  // Insert новый заказ — инициализируем status_history первым статусом.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("orders")
-    .insert({ ...payload, created_at: now })
+    .insert({
+      ...payload,
+      created_at: now,
+      status_history: appendStatusHistory(null, targetStatus, { via: "avito-sync" }),
+    })
     .select("id")
     .single();
   if (error) {
     console.error("[order-sync] insert error", avitoOrder.avito_order_id, error.message);
     return null;
   }
-  return { orderId: data.id as string, status: targetStatus, isNew: true };
+  return {
+    orderId: data.id as string,
+    status: targetStatus,
+    isNew: true,
+    transitions: {
+      delivered: justDelivered,
+      returnInitiated: justReturnInitiated,
+      returnArrived: justReturnArrived,
+    },
+  };
   // ownerUserId сейчас не используется напрямую (orders нет owner_id колонки),
   // но оставлен как явная связь сессии для будущих расширений.
   void ownerUserId;

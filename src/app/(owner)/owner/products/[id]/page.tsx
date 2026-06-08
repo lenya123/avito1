@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ProductAvitoMedia } from "@/components/owner/avito/product-avito-media";
+import { ProductAvitoListings } from "@/components/owner/avito/product-avito-listings";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { cn } from "@/utils/cn";
@@ -293,9 +294,9 @@ export default function ProductDetailPage() {
           {/* Photo + Info */}
           <div className="flex items-start gap-4 flex-1 min-w-0">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-white/[0.08] flex-shrink-0">
-              {(product.coverUrl || product.photoUrls[0]) ? (
+              {product.coverUrl ? (
                 <img
-                  src={product.coverUrl || product.photoUrls[0]}
+                  src={product.coverUrl}
                   alt={product.name}
                   className="w-full h-full object-cover"
                 />
@@ -852,6 +853,16 @@ export default function ProductDetailPage() {
         className="mb-6"
       >
         <ProductAvitoMedia productId={productId} />
+      </motion.div>
+
+      {/* Авито-объявления, привязанные к товару (ТЗ §3.2) */}
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.29 }}
+        className="mb-6"
+      >
+        <ProductAvitoListings productId={productId} />
       </motion.div>
 
       {/* Recent orders */}

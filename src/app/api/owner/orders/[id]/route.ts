@@ -42,6 +42,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           .single()
       : { data: null };
 
+    // Avito-заказ без привязки к товару каталога — название/фото из avito_orders
+    // (объявление могли удалить, но название заказа осталось → не «Товар удалён»).
+    const { data: avitoItem } =
+      !product && order.source === "avito" && order.avito_order_id
+        ? await supabase
+            .from("avito_orders")
+            .select("item_title, item_img_url")
+            .eq("avito_order_id", order.avito_order_id)
+            .maybeSingle()
+        : { data: null };
+
     // Получаем клиента из customers (Stage 2). Может быть NULL для ручных
     // заказов отправщика (customer_id=NULL).
     const { data: client } = order.customer_id
@@ -181,7 +192,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             dropPrice: product.drop_price,
             purchasePrice: product.purchase_price,
           }
-        : null,
+        : avitoItem?.item_title
+          ? {
+              id: "",
+              name: avitoItem.item_title,
+              photo: avitoItem.item_img_url || null,
+              dropPrice: null,
+              purchasePrice: null,
+            }
+          : null,
       client: client
         ? {
             id: client.id,

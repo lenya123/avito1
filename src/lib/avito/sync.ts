@@ -19,8 +19,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   fetchAvitoItems,
-  fetchAvitoItemStats,
+  fetchAvitoItemStatsPeriod,
   fetchAvitoChats,
+  fetchAvitoChatMessages,
   SessionExpiredError,
 } from "./web-client";
 import { scheduleAvitoTodayStats } from "@/lib/jobs/queues";
@@ -58,8 +59,6 @@ export interface SyncAvitoResult {
 // ---------------------------------------------------------------------------
 
 const ITEMS_PER_PAGE = 50;
-// Дата начала для статистики — покрываем всю историю
-const STATS_DATE_FROM = "2019-01-01";
 
 // ---------------------------------------------------------------------------
 // Main
@@ -139,7 +138,7 @@ export async function syncAvitoUser(opts: SyncAvitoUserOptions): Promise<SyncAvi
       }));
 
       const { error } = await supabase.from("avito_items").upsert(rows, {
-        onConflict: "user_id,avito_item_id",
+        onConflict: "session_id,avito_item_id",
       });
 
       if (error) {
@@ -177,7 +176,7 @@ export async function syncAvitoUser(opts: SyncAvitoUserOptions): Promise<SyncAvi
         (existingRows ?? []).map((r: any) => Number(r.avito_item_id))
       );
       const liveIds = new Set(allItemIds);
-      const stale = [...existingIds].filter((id) => !liveIds.has(id));
+      const stale = Array.from(existingIds).filter((id) => !liveIds.has(id));
       if (stale.length > 0) {
         await supabase
           .from("avito_items")
@@ -208,45 +207,73 @@ export async function syncAvitoUser(opts: SyncAvitoUserOptions): Promise<SyncAvi
   // Пауза перед stats
   await humanDelay(3_000, 7_000);
 
-  // --- 2. Stats (views, favorites, contacts) через web API ---
+  // --- 2. Per-day stats (views/favorites/contacts) через /web/1/vas/stats ---
+  // Avito web-flow НЕ имеет окно-эндпоинта на список объявлений (старый
+  // /web/1/profile/items/stats отдаёт 404). Единственный живой источник —
+  // POST /web/1/vas/stats, ПОШТУЧНО, возвращает РЕАЛЬНЫЕ дневные бакеты за
+  // последние ~N дней (N растёт с возрастом объявления, до запрошенного окна).
+  // Пишем каждый день в avito_item_stats_daily (session,item,date) — окно «за 30
+  // дней» в overview = SUM этих дневных строк. Бэкфилл самоисцеляется: каждый
+  // sync переписывает последние ~6-8 дней свежими значениями.
   try {
-    // Берём все item ID из БД (не только что синхронизированные)
     const { data: allItems } = await supabase
       .from("avito_items")
-      .select("avito_item_id, views, favorites, contacts")
-      .eq("user_id", userId);
+      .select("avito_item_id")
+      .eq("session_id", sessionId ?? "")
+      .limit(200);
 
-    if (allItems?.length) {
-      const itemIds = allItems.map((i) => i.avito_item_id);
-      const currentMap = new Map(allItems.map((i) => [i.avito_item_id, i]));
+    const itemIds = (allItems ?? []).map((i) => Number(i.avito_item_id)).filter(Boolean);
+    if (itemIds.length && sessionId) {
+      // Окно запроса — 32 дня (с запасом), сервер сам отдаст сколько есть.
+      const fromStr = new Date(Date.now() + 3 * 3600_000 - 32 * 86400_000)
+        .toISOString()
+        .slice(0, 10);
+      const toStr = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
 
-      // Московское время для корректных границ дней
-      const moscowNow = new Date(Date.now() + 3 * 60 * 60 * 1000);
-      const dateToStr = moscowNow.toISOString().split("T")[0];
-
-      const statsResult = await fetchAvitoItemStats(session, STATS_DATE_FROM, dateToStr, itemIds);
-
-      if (statsResult.items.length > 0) {
-        const statsRows = statsResult.items.map((stat) => {
-          const current = currentMap.get(stat.itemId);
-          // GREATEST: не уменьшаем значения при смещении окна
-          return {
-            user_id: userId,
-            avito_item_id: stat.itemId,
-            views: Math.max(current?.views ?? 0, stat.views),
-            favorites: Math.max(current?.favorites ?? 0, stat.favorites),
-            contacts: Math.max(current?.contacts ?? 0, stat.contacts),
-          };
-        });
-
-        await supabase.from("avito_items").upsert(statsRows, {
-          onConflict: "user_id,avito_item_id",
-        });
-        console.log(`[avito-sync] Stats updated for ${userId}: ${statsRows.length} items`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dailyRows: any[] = [];
+      for (const itemId of itemIds) {
+        try {
+          const st = await fetchAvitoItemStatsPeriod(session, itemId, {
+            from: fromStr,
+            to: toStr,
+          });
+          if (st?.daily) {
+            for (const [date, d] of Object.entries(st.daily)) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const day = d as any;
+              dailyRows.push({
+                user_id: userId,
+                session_id: sessionId,
+                avito_item_id: String(itemId),
+                date,
+                views: Number(day?.views) || 0,
+                favorites: Number(day?.favorites) || 0,
+                contacts: Number(day?.contacts) || 0,
+                synced_at: now,
+              });
+            }
+          }
+        } catch (perItemErr) {
+          if (perItemErr instanceof SessionExpiredError) throw perItemErr;
+          console.error(`[avito-sync] vas/stats item ${itemId} error:`, perItemErr);
+        }
+        // Гуманная пауза между объявлениями (мягче на прокси/антибот).
+        await humanDelay(800, 2_000);
       }
 
-      // Today stats — delayed BullMQ job (61s), fire-and-forget
-      scheduleAvitoTodayStats(userId, itemIds).catch((e) => {
+      if (dailyRows.length) {
+        await supabase
+          .from("avito_item_stats_daily")
+          .upsert(dailyRows, { onConflict: "session_id,avito_item_id,date" });
+        console.log(
+          `[avito-sync] vas/stats: ${dailyRows.length} day-rows over ${itemIds.length} items for ${userId}`
+        );
+      }
+
+      // Today stats — delayed BullMQ job (61s), fire-and-forget.
+      // Передаём sessionId — джоб должен ходить через ЭТОТ акк (мультиаккаунт).
+      scheduleAvitoTodayStats(userId, itemIds, sessionId).catch((e) => {
         console.error(`[avito-sync] Failed to schedule today stats for ${userId}:`, e);
       });
     }
@@ -283,7 +310,7 @@ export async function syncAvitoUser(opts: SyncAvitoUserOptions): Promise<SyncAvi
       }));
 
       const { error } = await supabase.from("avito_chats").upsert(chatRows, {
-        onConflict: "user_id,avito_chat_id",
+        onConflict: "session_id,avito_chat_id",
       });
 
       if (error) {
@@ -295,6 +322,64 @@ export async function syncAvitoUser(opts: SyncAvitoUserOptions): Promise<SyncAvi
   } catch (chatsErr) {
     if (chatsErr instanceof SessionExpiredError) throw chatsErr;
     console.error(`[avito-sync] Chats error for ${userId}:`, chatsErr);
+  }
+
+  // --- 4. Sync messages для недавних чатов (фон) ---
+  // Предзаполняем диалоги (avito_messages), чтобы переписка открывалась мгновенно
+  // и AI-агент/уведомления видели её без ручного открытия. Кап на свежие 30 чатов
+  // (по last_message_at), пер-чат ошибки не валят синк, с паузами против антибота.
+  if (sessionId) {
+    try {
+      await humanDelay(2_000, 4_000);
+      const { data: ownerRow } = await supabase
+        .from("avito_browser_sessions")
+        .select("avito_user_id")
+        .eq("id", sessionId)
+        .maybeSingle();
+      const ownerId =
+        (ownerRow as { avito_user_id?: number | null } | null)?.avito_user_id ?? undefined;
+
+      const { data: recentChats } = await supabase
+        .from("avito_chats")
+        .select("id, avito_chat_id")
+        .eq("session_id", sessionId)
+        .order("last_message_at", { ascending: false })
+        .limit(30);
+
+      let msgChats = 0;
+      for (const ch of (recentChats ?? []) as Array<{ id: string; avito_chat_id: string }>) {
+        try {
+          const msgs = await fetchAvitoChatMessages(session, ch.avito_chat_id, 50, ownerId);
+          if (msgs.length) {
+            const rows = msgs.map((m) => ({
+              chat_id: ch.id,
+              user_id: userId,
+              avito_message_id: m.id,
+              direction: m.direction,
+              content_text: m.text,
+              content_image_url: m.imageUrl,
+              message_type: String(m.type),
+              author_id: m.authorId,
+              avito_created_at: new Date(m.created * 1000).toISOString(),
+            }));
+            await supabase
+              .from("avito_messages")
+              .upsert(rows, { onConflict: "chat_id,avito_message_id" });
+            msgChats++;
+          }
+        } catch (perChatErr) {
+          if (perChatErr instanceof SessionExpiredError) throw perChatErr;
+          // одиночный чат не валит весь синк
+        }
+        await humanDelay(600, 1_500);
+      }
+      if (msgChats) {
+        console.log(`[avito-sync] messages synced for ${msgChats} chats (${userId})`);
+      }
+    } catch (msgErr) {
+      if (msgErr instanceof SessionExpiredError) throw msgErr;
+      console.error(`[avito-sync] messages error for ${userId}:`, msgErr);
+    }
   }
 
   return { items: itemsSynced, chats: chatsSynced };

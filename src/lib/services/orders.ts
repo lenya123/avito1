@@ -124,6 +124,8 @@ export async function listOrders({
       created_at,
       updated_at,
       size,
+      source,
+      avito_order_id,
       customer_id,
       customer_name_snapshot,
       customer_tg_username_snapshot,
@@ -165,14 +167,41 @@ export async function listOrders({
   const customersMap = new Map((customersResult.data || []).map((c) => [c.id, c]));
   const productsMap = new Map((productsResult.data || []).map((p) => [p.id, p]));
 
+  // Avito-заказы без привязанного товара: подтягиваем item_title/img из avito_orders
+  // (название НЕ дублируется в orders), чтобы карточка показывала товар, а не
+  // «Товар удалён» — объявление можно было удалить, но название заказа осталось.
+  const avitoOrderIds = Array.from(
+    new Set(
+      (orders || [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .filter((o: any) => o.source === "avito" && !o.product_id && o.avito_order_id)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((o: any) => o.avito_order_id)
+    )
+  ) as string[];
+  const avitoItemsResult =
+    avitoOrderIds.length > 0
+      ? await supabase
+          .from("avito_orders")
+          .select("avito_order_id, item_title, item_img_url")
+          .in("avito_order_id", avitoOrderIds)
+      : { data: [] as { avito_order_id: string; item_title: string | null; item_img_url: string | null }[] };
+  const avitoItemsMap = new Map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((avitoItemsResult.data as any[]) || []).map((a) => [a.avito_order_id, a])
+  );
+
   const ordersFormatted: OrderListItem[] =
     orders?.map((o) => {
       const customer = o.customer_id ? customersMap.get(o.customer_id) : null;
       const product = o.product_id ? productsMap.get(o.product_id) : null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const avitoItem = (o as any).avito_order_id ? avitoItemsMap.get((o as any).avito_order_id) : null;
       return {
         id: o.id,
         orderNumber: o.order_number,
         status: o.status as string,
+        source: (o.source as string | null) ?? null,
         clientPrice: o.client_price ?? 0,
         purchasePrice: o.purchase_price ?? 0,
         // Прибыль по канону §9.4 (свой = client−purchase−shipper_rate;
@@ -215,7 +244,14 @@ export async function listOrders({
               name: product.name,
               photo: product.photo_urls?.[0] || null,
             }
-          : null,
+          : avitoItem?.item_title
+            ? {
+                // Фолбэк для Avito-заказа без привязки к товару каталога.
+                id: "",
+                name: avitoItem.item_title,
+                photo: avitoItem.item_img_url || null,
+              }
+            : null,
       };
     }) || [];
 

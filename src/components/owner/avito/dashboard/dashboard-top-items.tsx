@@ -6,8 +6,11 @@ import { cn } from "@/utils/cn";
 import { useAvitoItems } from "@/hooks/use-avito";
 
 export function DashboardTopItems() {
-  const { data: itemsData } = useAvitoItems(1, 6, "active");
+  // Тянем все активные (до 200 — покрывает любой реальный магазин), чтобы рейтинг
+  // считался по ВСЕМ товарам, а кнопка «Все» разворачивала полный список.
+  const { data: itemsData } = useAvitoItems(1, 200, "active");
   const [showWorst, setShowWorst] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const sortedItems = useMemo(() => {
     if (!itemsData?.items) return [];
@@ -19,10 +22,13 @@ export function DashboardTopItems() {
         ((item.views ?? 0) + (item.views_today ?? 0)),
     }));
     scored.sort((a, b) => (showWorst ? a.score - b.score : b.score - a.score));
-    return scored.slice(0, 5);
+    return scored;
   }, [itemsData, showWorst]);
 
   if (!itemsData || itemsData.items.length < 3) return null;
+
+  // 5 по умолчанию, «Все» разворачивает полный рейтинг (универсально по числу).
+  const visibleItems = showAll ? sortedItems : sortedItems.slice(0, 5);
 
   return (
     <div
@@ -83,7 +89,7 @@ export function DashboardTopItems() {
 
       {/* List */}
       <div className="space-y-2">
-        {sortedItems.map((item, i) => (
+        {visibleItems.map((item, i) => (
           <div key={item.id} className="flex items-center gap-3">
             <span className="text-xs text-white/40 w-4 text-right font-medium">{i + 1}</span>
             <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/5 shrink-0">
@@ -114,6 +120,20 @@ export function DashboardTopItems() {
           </div>
         ))}
       </div>
+
+      {/* Кнопка «Все» — разворачивает полный рейтинг (универсально по числу товаров) */}
+      {sortedItems.length > 5 && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className={cn(
+            "mt-3 w-full py-2 text-xs font-medium rounded-xl transition-all duration-200",
+            "bg-white/[0.06] text-white/70 border border-glass-subtle shadow-glass-inset",
+            "hover:text-white hover:bg-white/[0.10] hover:border-white/20"
+          )}
+        >
+          {showAll ? "Свернуть" : `Все (${sortedItems.length})`}
+        </button>
+      )}
     </div>
   );
 }
